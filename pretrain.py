@@ -291,8 +291,45 @@ class ELECTRA():
 
 
     def train(self):
-        self.trainer.train( model_file=None, data_parallel=False)
+        self.trainer.train(self.writer, model_file=None, data_parallel=False)
 
+class MaskTrainer():
+
+    def __init__(self, args):
+        self.args = args
+        cfg = train.Config.from_json(args.train_cfg)
+        model_cfg = models.Config.from_json(args.model_cfg)
+        set_seeds(cfg.seed)
+
+        tokenizer = tokenization.FullTokenizer(vocab_file=args.vocab, do_lower_case=True)
+        tokenize = lambda x: tokenizer.tokenize(tokenizer.convert_to_unicode(x))
+
+        pipeline = [Preprocess4Pretrain(args.max_pred,
+                                        args.mask_prob,
+                                        list(tokenizer.vocab.keys()),
+                                        tokenizer.convert_tokens_to_ids,
+                                        model_cfg.max_len,
+                                        args.mask_alpha,
+                                        args.mask_beta,
+                                        args.max_gram)]
+        data_iter = SentPairDataLoader(args.data_file,
+                                    cfg.batch_size,
+                                    tokenize,
+                                    model_cfg.max_len,
+                                    pipeline=pipeline)
+
+        model = Generator(model_cfg)
+
+        self.optimizer = optim.optim4GPU(cfg, model)
+        self.trainer = train.MLMTrainer(cfg, 
+            model, 
+            data_iter, 
+            self.optimizer, args.save_dir, get_device())
+        os.makedirs(os.path.join(args.log_dir, args.name), exist_ok=True)
+        self.writer = SummaryWriter(log_dir=os.path.join(args.log_dir, args.name)) # for tensorboardX
+
+    def train(self):
+        self.trainer.train(self.writer, model_file=None, data_parallel=False)
 
 
 
@@ -301,6 +338,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_file', type=str, default='./data/wiki.train.tokens')
     parser.add_argument('--vocab', type=str, default='./data/vocab.txt')
     parser.add_argument('--name', type=str, default='baseline')
+    parser.add_argument('--mode', type=str, choices=['mask','electra'], default='mask')
     parser.add_argument('--train_cfg', type=str, default='./config/pretrain.json')
     parser.add_argument('--generator_cfg', type=str, default='./config/albert_unittest.json')
     parser.add_argument('--model_cfg', type=str, default='./config/albert_unittest.json')
@@ -322,6 +360,11 @@ if __name__ == '__main__':
     parser.add_argument('--log_dir', type=str, default='./log')
 
     args = parser.parse_args()
-    trainer = ELECTRA(args=args)
+    if args.mode == 'mask':
+        print('Mask pretraining')
+        trainer = MaskTrainer(args=args)
+    else:
+        print('Electra pretraining')
+        trainer = ELECTRA(args=args)
     trainer.train()
 

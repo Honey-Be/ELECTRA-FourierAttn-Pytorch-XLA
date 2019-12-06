@@ -66,7 +66,7 @@ def discriminator_loss(model, batch, global_step, optimizer, cross_ent, sent_cro
     return loss_lm + loss_sop, logits_lm, loss_sop
 
 
-class Trainer(object):
+class MLMTrainer(object):
     """Training Helper Class"""
     def __init__(self, cfg, model, data_iter, optimizer, save_dir, device):
         self.cfg = cfg # config for training : see class Config
@@ -75,8 +75,11 @@ class Trainer(object):
         self.optimizer = optimizer
         self.save_dir = save_dir
         self.device = device # device name
+        self.cross_ent = nn.CrossEntropyLoss(reduction='none')
+        self.sent_cross_ent = nn.CrossEntropyLoss()
 
-    def train(self, get_loss, model_file=None, data_parallel=False):
+
+    def train(self, writer=None, model_file=None, data_parallel=False):
         """ Train Loop """
         if isinstance(self.model, tuple):
             for m in self.model:
@@ -94,7 +97,13 @@ class Trainer(object):
                 batch = [t.to(self.device) for t in batch]
 
                 self.optimizer.zero_grad()
-                loss, _, _ = discriminator_loss(model, batch, global_step, self.optimizer).mean() # mean() for Data Parallelism
+                loss, loss_lm, _ = generator_loss(model, batch, global_step, 
+                    self.optimizer,
+                    self.cross_ent, self.sent_cross_ent,
+                    writer, prefix='baseline'
+                    )
+                if data_parallel:
+                    loss = loss.mean()
                 loss.backward()
                 self.optimizer.step()
 
@@ -161,7 +170,7 @@ class AdversarialTrainer(object):
         self.sent_cross_ent = nn.CrossEntropyLoss()
 
 
-    def train(self, model_file=None, data_parallel=False):
+    def train(self, writer=None, model_file=None, data_parallel=False):
         """ Train Loop """
         self.discriminator.train() # train mode
         self.generator.train()
@@ -183,7 +192,7 @@ class AdversarialTrainer(object):
                 g_loss, loss_lm, _ = generator_loss(generator, batch, global_step, 
                     self.g_optimizer,
                     self.cross_ent, self.sent_cross_ent,
-                    self.writer, prefix='electra'
+                    writer, prefix='electra'
                     )
                 g_loss.backward()
                 if data_parallel:
@@ -204,13 +213,13 @@ class AdversarialTrainer(object):
                 d_loss, _, _ = discriminator_loss(discriminator, batch, global_step, 
                     self.d_optimizer,
                     self.cross_ent, self.sent_cross_ent,
-                    self.writer, prefix='electra')
+                    writer, prefix='electra')
                 if data_parallel:
                     d_loss.mean()
 
                 self.d_optimizer.step()
 
-                iter_bar.set_description('Iter (d_loss=%5.3f,' % d_loss.item(), 'g_loss=%5.3f' % g_loss.item())
+                iter_bar.set_description('Iter (d_loss=%5.3f,g_loss=%5.3f' % (d_loss.item(),g_loss.item()))
 
                 if global_step % self.cfg.save_steps == 0: # save
                     self.save(global_step)
@@ -226,11 +235,11 @@ class AdversarialTrainer(object):
 
     def eval(self, evaluate, model_file, data_parallel=True):
         """ Evaluation Loop """
-        self.model.eval() # evaluation mode
+        self.generator.eval() # evaluation mode
         self.load(model_file)
-        model = self.model.to(self.device)
+        generator = self.generator.to(self.device)
         if data_parallel: # use Data Parallelism with Multi-GPU
-            model = nn.DataParallel(model)
+            generator = nn.DataParallel(generator)
 
         results = [] # prediction results
         iter_bar = tqdm(self.data_iter, desc='Iter (loss=X.XXX)')
@@ -247,10 +256,11 @@ class AdversarialTrainer(object):
         """ load saved model or pretrained transformer (a part of model) """
         if model_file:
             print('Loading the model from', model_file)
-            self.model.load_state_dict(torch.load(model_file))
+            self.generator.load_state_dict(torch.load(model_file))
 
     def save(self, i):
         """ save current model """
-        torch.save(self.model, os.path.join(self.save_dir, 'backbone.pt'))
-        torch.save(self.model.state_dict(), # save model object before nn.DataParallel
-            os.path.join(self.save_dir, 'model_steps_'+str(i)+'.pt'))
+        torch.save(self.generator, os.path.join(self.save_dir, 'g_backbone.pt'))
+        torch.save(self.discriminator, os.path.join(self.save_dir, 'd_backbone.pt'))
+        torch.save(self.discriminator.state_dict(), # save model object before nn.DataParallel
+            os.path.join(self.save_dir, 'd_model_steps_'+str(i)+'.pt'))
