@@ -140,6 +140,7 @@ class Preprocess4Pretrain(Pipeline):
         # the number of prediction is sometimes less than max_pred when sequence is short
         n_pred = min(self.max_pred, max(1, int(round(len(tokens) * self.mask_prob))))
 
+        original_ids = self.indexer(tokens)
         # For masked Language Models
         masked_tokens, masked_pos, tokens = _sample_mask(tokens, self.mask_alpha,
                                             self.mask_beta, self.max_gram,
@@ -148,11 +149,13 @@ class Preprocess4Pretrain(Pipeline):
         masked_weights = [1]*len(masked_tokens)
 
         # Token Indexing
+
         input_ids = self.indexer(tokens)
         masked_ids = self.indexer(masked_tokens)
 
         # Zero Padding
         n_pad = self.max_len - len(input_ids)
+        original_ids.extend([0]*n_pad)
         input_ids.extend([0]*n_pad)
         segment_ids.extend([0]*n_pad)
         input_mask.extend([0]*n_pad)
@@ -164,10 +167,12 @@ class Preprocess4Pretrain(Pipeline):
             masked_pos.extend([0] * (self.max_pred - len(masked_pos)))
         if self.max_pred > len(masked_weights):
             masked_weights.extend([0] * (self.max_pred - len(masked_weights)))
+        
+        # Author implementation isn't exact the same as original bert model 
+        # as masked_ids only contain the un-masked token
+        return (input_ids, segment_ids, input_mask, masked_ids, masked_pos, masked_weights, is_next, original_ids)
 
-        return (input_ids, segment_ids, input_mask, masked_ids, masked_pos, masked_weights, is_next)
-
-class Discriminator(nn.Module):
+class Generator(nn.Module):
     "Bert Model for Pretrain : Masked LM and next sentence classification"
     def __init__(self, cfg):
         super().__init__()
@@ -207,7 +212,7 @@ class Discriminator(nn.Module):
         return logits_lm, logits_clsf
 
 
-class Generator(nn.Module):
+class Discriminator(nn.Module):
     "Bert Model for Pretrain : Masked LM and next sentence classification"
     def __init__(self, cfg):
         super().__init__()
@@ -234,15 +239,12 @@ class Generator(nn.Module):
 
         self.decoder_bias = nn.Parameter(torch.zeros(n_vocab))
 
-    def forward(self, input_ids, segment_ids, input_mask, masked_pos):
+    def forward(self, input_ids, segment_ids, input_mask):
         h = self.transformer(input_ids, segment_ids, input_mask)
-        pooled_h = self.activ1(self.fc(h[:, 0]))
-        masked_pos = masked_pos[:, :, None].expand(-1, -1, h.size(-1))
-        h_masked = torch.gather(h, 1, masked_pos)
-        h_masked = self.norm(self.activ2(self.linear(h_masked)))
+        cls_h = self.activ1(self.fc(h[:, 0]))
 
-        logits = self.discriminator(self.decoder1(h_masked)) + self.decoder_bias
-        logits_clsf = self.classifier(pooled_h)
+        logits = self.discriminator(self.decoder1(h)) + self.decoder_bias
+        logits_clsf = self.classifier(cls_h)
 
         return logits, logits_clsf
 

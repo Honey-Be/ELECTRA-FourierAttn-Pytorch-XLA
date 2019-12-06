@@ -31,7 +31,7 @@ class Config(NamedTuple):
         return cls(**json.load(open(file, "r")))
 
 def generator_loss(model, batch, global_step, optimizer, cross_ent, sent_cross_ent, writer=None, prefix='pretrain'): # make sure loss is tensor
-    input_ids, segment_ids, input_mask, masked_ids, masked_pos, masked_weights, is_next = batch
+    input_ids, segment_ids, input_mask, masked_ids, masked_pos, masked_weights, is_next, _ = batch
     logits_lm, logits_clsf = model(input_ids, segment_ids, input_mask, masked_pos)
     loss_lm = cross_ent(logits_lm.transpose(1, 2), masked_ids) # for masked LM
     loss_lm = (loss_lm*masked_weights.float()).mean()
@@ -48,11 +48,18 @@ def generator_loss(model, batch, global_step, optimizer, cross_ent, sent_cross_e
     return loss_lm + loss_sop, logits_lm, loss_sop
 
 
-def discriminator_loss(model, batch, global_step, optimizer, cross_ent, sent_cross_ent, writer=None, prefix='pretrain'): # make sure loss is tensor
-    input_ids, segment_ids, input_mask, masked_ids, masked_pos, masked_weights, is_next = batch
-    logits_lm, logits_clsf = model(input_ids, segment_ids, input_mask, masked_pos)
-    loss_lm = cross_ent(logits_lm.transpose(1, 2), masked_ids) # for masked LM
-    loss_lm = (loss_lm*masked_weights.float()).mean()
+def discriminator_loss(generator, discriminator, batch, global_step, optimizer, cross_ent, sent_cross_ent, writer=None, prefix='pretrain'): # make sure loss is tensor
+    input_ids, segment_ids, input_mask, _, _, _, is_next, original_ids = batch
+    with torch.no_grad():
+        h = generator.transformer(input_ids, segment_ids, input_mask)
+        logits_lm = generator.decoder2(generator.decoder1(h)) + generator.decoder_bias
+    input_ids = torch.argmax(logits_lm, axis=2)
+    is_replaced = (input_ids == original_ids).long()
+    is_replaced = is_replaced.cuda()
+
+    logits_lm, logits_clsf = discriminator(input_ids, segment_ids, input_mask)
+    loss_lm = cross_ent(logits_lm.transpose(1, 2), is_replaced) # for masked LM
+    loss_lm = loss_lm.mean()
     loss_sop = sent_cross_ent(logits_clsf, is_next) # for sentence classification
 
     if writer:
@@ -189,7 +196,7 @@ class AdversarialTrainer(object):
                 batch = [t.to(self.device) for t in batch]
 
                 self.g_optimizer.zero_grad()
-                g_loss, loss_lm, _ = generator_loss(generator, batch, global_step, 
+                g_loss, _, _ = generator_loss(generator, batch, global_step, 
                     self.g_optimizer,
                     self.cross_ent, self.sent_cross_ent,
                     writer, prefix='electra'
@@ -202,15 +209,8 @@ class AdversarialTrainer(object):
                 global_step += 1
                 loss_sum += g_loss.item()
 
-                loss_lm.detach()
-                self.d_optimizer.zero_grad()     
-                masked_ids = batch[3]
-                loss_lm = torch.argmax(loss_lm, axis=2)
-                is_replaced = (loss_lm == masked_ids).long()
-                is_replaced = is_replaced.to(self.device)
-                batch[3] = is_replaced
-
-                d_loss, _, _ = discriminator_loss(discriminator, batch, global_step, 
+                self.d_optimizer.zero_grad()
+                d_loss, _, _ = discriminator_loss(generator, discriminator, batch, global_step, 
                     self.d_optimizer,
                     self.cross_ent, self.sent_cross_ent,
                     writer, prefix='electra')
