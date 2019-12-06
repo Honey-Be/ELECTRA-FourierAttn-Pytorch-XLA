@@ -246,13 +246,14 @@ class Generator(nn.Module):
 
         return logits, logits_clsf
 
-class MaskPretraining():
+class ELECTRA():
 
     def __init__(self, args):
         self.args = args
         cfg = train.Config.from_json(args.train_cfg)
         model_cfg = models.Config.from_json(args.model_cfg)
-
+        generator_cfg = models.Config.from_json(args.generator_cfg)
+        assert model_cfg.max_len == generator_cfg.max_len
         set_seeds(cfg.seed)
 
         tokenizer = tokenization.FullTokenizer(vocab_file=args.vocab, do_lower_case=True)
@@ -272,33 +273,25 @@ class MaskPretraining():
                                     model_cfg.max_len,
                                     pipeline=pipeline)
 
-        model = Discriminator(model_cfg)
+        discriminator = Discriminator(model_cfg)
+        generator = Generator(generator_cfg)
+
         self.cross_ent = nn.CrossEntropyLoss(reduction='none')
         self.sent_cross_ent = nn.CrossEntropyLoss()
 
-        self.optimizer = optim.optim4GPU(cfg, model)
-        self.trainer = train.Trainer(cfg, model, data_iter, self.optimizer, args.save_dir, get_device())
+        self.d_optimizer = optim.optim4GPU(cfg, discriminator)
+        self.g_optimizer = optim.optim4GPU(cfg, generator)
+        self.trainer = train.AdversarialTrainer(cfg, 
+            discriminator, generator, 
+            data_iter, 
+            self.d_optimizer, self.g_optimizer, args.save_dir, get_device())
         os.makedirs(os.path.join(args.log_dir, args.name), exist_ok=True)
         self.writer = SummaryWriter(log_dir=os.path.join(args.log_dir, args.name)) # for tensorboardX
 
 
-    def loss(self, model, batch, global_step): # make sure loss is tensor
-        input_ids, segment_ids, input_mask, masked_ids, masked_pos, masked_weights, is_next = batch
-        logits_lm, logits_clsf = model(input_ids, segment_ids, input_mask, masked_pos)
-        loss_lm = self.cross_ent(logits_lm.transpose(1, 2), masked_ids) # for masked LM
-        loss_lm = (loss_lm*masked_weights.float()).mean()
-        loss_sop = self.sent_cross_ent(logits_clsf, is_next) # for sentence classification
-        self.writer.add_scalars('data/scalar_group',
-                            {'loss_lm': loss_lm.item(),
-                            'loss_sop': loss_sop.item(),
-                            'loss_total': (loss_lm + loss_sop).item(),
-                            'lr': self.optimizer.get_lr()[0],
-                            },
-                            global_step)
-        return loss_lm + loss_sop
 
     def train(self):
-        self.trainer.train(self.loss, model_file=None, data_parallel=False)
+        self.trainer.train( model_file=None, data_parallel=False)
 
 
 
@@ -329,6 +322,6 @@ if __name__ == '__main__':
     parser.add_argument('--log_dir', type=str, default='./log')
 
     args = parser.parse_args()
-    trainer = MaskPretraining(args=args)
+    trainer = ELECTRA(args=args)
     trainer.train()
 
