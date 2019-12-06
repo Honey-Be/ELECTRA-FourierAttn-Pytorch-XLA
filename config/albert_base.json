@@ -1,12 +1,10 @@
 {
 	"embedding" : 128,
-
-	"hidden": 768,
-	"hidden_ff": 3072,
-
-	"n_layers": 12,
+	"hidden": 660,
+	"hidden_ff": 768,
+	"n_layers": 6,
 	"n_heads": 12,
-	"max_len": 512,
+	"max_len": 400,
 	"n_segments": 2,
 	"vocab_size": 30522
 }

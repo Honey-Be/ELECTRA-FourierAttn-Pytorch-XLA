@@ -1,13 +1,11 @@
-# ALBERT-Pytorch
+# ELECTRA-Pytorch
 
-Simply implementation of [ALBERT(A LITE BERT FOR SELF-SUPERVISED LEARNING OF LANGUAGE REPRESENTATIONS)](https://arxiv.org/pdf/1909.11942.pdf) in Pytorch. This implementation is based on clean [dhlee347](https://github.com/dhlee347)/[pytorchic-bert](https://github.com/dhlee347/pytorchic-bert) code.
+~~Simply implementation of [ALBERT(A LITE BERT FOR SELF-SUPERVISED LEARNING OF LANGUAGE REPRESENTATIONS)](https://arxiv.org/pdf/1909.11942.pdf) in Pytorch. This implementation is based on clean [dhlee347](https://github.com/dhlee347)/[pytorchic-bert](https://github.com/dhlee347/pytorchic-bert) code.~~~
 
-Please make sure that I haven't checked the performance yet(i.e Fine-Tuning), only see SOP(sentence-order prediction) and MLM(Masked Langauge model with n-gram) loss falling.
 
-- You can see [my implementation of differnt between Original BERT and ALBERT](https://github.com/graykode/ALBERT-Pytorch/commit/757fd6d5de5407f47eb44a6c5c96a3ab203f98d4)
+~~Please make sure that I haven't checked the performance yet(i.e Fine-Tuning), only see SOP(sentence-order prediction) and MLM(Masked Langauge model with n-gram) loss falling.~~
 
-**CAUTION** Fine-Tuning Tasks not yet!
-
+~~- You can see [my implementation of differnt between Original BERT and ALBERT](https://github.com/graykode/ALBERT-Pytorch/commit/757fd6d5de5407f47eb44a6c5c96a3ab203f98d4)~~
 
 
 ## File Overview

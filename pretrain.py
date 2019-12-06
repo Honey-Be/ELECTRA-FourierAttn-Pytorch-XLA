@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 import argparse
 from tensorboardX import SummaryWriter
-
+import os
 import tokenization
 import models
 import optim
@@ -167,7 +167,7 @@ class Preprocess4Pretrain(Pipeline):
 
         return (input_ids, segment_ids, input_mask, masked_ids, masked_pos, masked_weights, is_next)
 
-class BertModel4Pretrain(nn.Module):
+class Discriminator(nn.Module):
     "Bert Model for Pretrain : Masked LM and next sentence classification"
     def __init__(self, cfg):
         super().__init__()
@@ -206,63 +206,110 @@ class BertModel4Pretrain(nn.Module):
 
         return logits_lm, logits_clsf
 
-def main(args):
 
-    cfg = train.Config.from_json(args.train_cfg)
-    model_cfg = models.Config.from_json(args.model_cfg)
+class Generator(nn.Module):
+    "Bert Model for Pretrain : Masked LM and next sentence classification"
+    def __init__(self, cfg):
+        super().__init__()
+        self.transformer = models.Transformer(cfg)
+        self.fc = nn.Linear(cfg.hidden, cfg.hidden)
+        self.activ1 = nn.Tanh()
+        self.linear = nn.Linear(cfg.hidden, cfg.hidden)
+        self.activ2 = models.gelu
+        self.norm = models.LayerNorm(cfg)
+        self.classifier = nn.Linear(cfg.hidden, 2)
 
-    set_seeds(cfg.seed)
+        # decoder is shared with embedding layer
+        ## project hidden layer to embedding layer
+        embed_weight2 = self.transformer.embed.tok_embed2.weight
+        n_hidden, n_embedding = embed_weight2.size()
+        self.decoder1 = nn.Linear(n_hidden, n_embedding, bias=False)
+        self.decoder1.weight.data = embed_weight2.data.t()
 
-    tokenizer = tokenization.FullTokenizer(vocab_file=args.vocab, do_lower_case=True)
-    tokenize = lambda x: tokenizer.tokenize(tokenizer.convert_to_unicode(x))
+        ## project embedding layer to vocabulary layer
+        embed_weight1 = self.transformer.embed.tok_embed1.weight
+        n_vocab, n_embedding = embed_weight1.size()
+        self.discriminator = nn.Linear(n_embedding, 2, bias=False)
+        self.discriminator.weight = embed_weight1
 
-    pipeline = [Preprocess4Pretrain(args.max_pred,
-                                    args.mask_prob,
-                                    list(tokenizer.vocab.keys()),
-                                    tokenizer.convert_tokens_to_ids,
+        self.decoder_bias = nn.Parameter(torch.zeros(n_vocab))
+
+    def forward(self, input_ids, segment_ids, input_mask, masked_pos):
+        h = self.transformer(input_ids, segment_ids, input_mask)
+        pooled_h = self.activ1(self.fc(h[:, 0]))
+        masked_pos = masked_pos[:, :, None].expand(-1, -1, h.size(-1))
+        h_masked = torch.gather(h, 1, masked_pos)
+        h_masked = self.norm(self.activ2(self.linear(h_masked)))
+
+        logits = self.discriminator(self.decoder1(h_masked)) + self.decoder_bias
+        logits_clsf = self.classifier(pooled_h)
+
+        return logits, logits_clsf
+
+class MaskPretraining():
+
+    def __init__(self, args):
+        self.args = args
+        cfg = train.Config.from_json(args.train_cfg)
+        model_cfg = models.Config.from_json(args.model_cfg)
+
+        set_seeds(cfg.seed)
+
+        tokenizer = tokenization.FullTokenizer(vocab_file=args.vocab, do_lower_case=True)
+        tokenize = lambda x: tokenizer.tokenize(tokenizer.convert_to_unicode(x))
+
+        pipeline = [Preprocess4Pretrain(args.max_pred,
+                                        args.mask_prob,
+                                        list(tokenizer.vocab.keys()),
+                                        tokenizer.convert_tokens_to_ids,
+                                        model_cfg.max_len,
+                                        args.mask_alpha,
+                                        args.mask_beta,
+                                        args.max_gram)]
+        data_iter = SentPairDataLoader(args.data_file,
+                                    cfg.batch_size,
+                                    tokenize,
                                     model_cfg.max_len,
-                                    args.mask_alpha,
-                                    args.mask_beta,
-                                    args.max_gram)]
-    data_iter = SentPairDataLoader(args.data_file,
-                                   cfg.batch_size,
-                                   tokenize,
-                                   model_cfg.max_len,
-                                   pipeline=pipeline)
+                                    pipeline=pipeline)
 
-    model = BertModel4Pretrain(model_cfg)
-    criterion1 = nn.CrossEntropyLoss(reduction='none')
-    criterion2 = nn.CrossEntropyLoss()
+        model = Discriminator(model_cfg)
+        self.cross_ent = nn.CrossEntropyLoss(reduction='none')
+        self.sent_cross_ent = nn.CrossEntropyLoss()
 
-    optimizer = optim.optim4GPU(cfg, model)
-    trainer = train.Trainer(cfg, model, data_iter, optimizer, args.save_dir, get_device())
+        self.optimizer = optim.optim4GPU(cfg, model)
+        self.trainer = train.Trainer(cfg, model, data_iter, self.optimizer, args.save_dir, get_device())
+        os.makedirs(os.path.join(args.log_dir, args.name), exist_ok=True)
+        self.writer = SummaryWriter(log_dir=os.path.join(args.log_dir, args.name)) # for tensorboardX
 
-    writer = SummaryWriter(log_dir=args.log_dir) # for tensorboardX
 
-    def get_loss(model, batch, global_step): # make sure loss is tensor
+    def loss(self, model, batch, global_step): # make sure loss is tensor
         input_ids, segment_ids, input_mask, masked_ids, masked_pos, masked_weights, is_next = batch
-
         logits_lm, logits_clsf = model(input_ids, segment_ids, input_mask, masked_pos)
-        loss_lm = criterion1(logits_lm.transpose(1, 2), masked_ids) # for masked LM
+        loss_lm = self.cross_ent(logits_lm.transpose(1, 2), masked_ids) # for masked LM
         loss_lm = (loss_lm*masked_weights.float()).mean()
-        loss_sop = criterion2(logits_clsf, is_next) # for sentence classification
-        writer.add_scalars('data/scalar_group',
-                           {'loss_lm': loss_lm.item(),
+        loss_sop = self.sent_cross_ent(logits_clsf, is_next) # for sentence classification
+        self.writer.add_scalars('data/scalar_group',
+                            {'loss_lm': loss_lm.item(),
                             'loss_sop': loss_sop.item(),
                             'loss_total': (loss_lm + loss_sop).item(),
-                            'lr': optimizer.get_lr()[0],
-                           },
-                           global_step)
+                            'lr': self.optimizer.get_lr()[0],
+                            },
+                            global_step)
         return loss_lm + loss_sop
 
-    trainer.train(get_loss, model_file=None, data_parallel=True)
+    def train(self):
+        self.trainer.train(self.loss, model_file=None, data_parallel=False)
+
+
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch ALBERT Language Model')
     parser.add_argument('--data_file', type=str, default='./data/wiki.train.tokens')
     parser.add_argument('--vocab', type=str, default='./data/vocab.txt')
+    parser.add_argument('--name', type=str, default='baseline')
     parser.add_argument('--train_cfg', type=str, default='./config/pretrain.json')
+    parser.add_argument('--generator_cfg', type=str, default='./config/albert_unittest.json')
     parser.add_argument('--model_cfg', type=str, default='./config/albert_unittest.json')
 
     # official google-reacher/bert is use 20, but 20/512(=seq_len)*100 make only 3% Mask
@@ -282,4 +329,6 @@ if __name__ == '__main__':
     parser.add_argument('--log_dir', type=str, default='./log')
 
     args = parser.parse_args()
-    main(args=args)
+    trainer = MaskPretraining(args=args)
+    trainer.train()
+

@@ -43,7 +43,9 @@ class Trainer(object):
 
     def train(self, get_loss, model_file=None, data_parallel=False):
         """ Train Loop """
-        self.model.train() # train mode
+        if isinstance(self.model, tuple):
+            for m in self.model:
+                m.train() # train mode
         self.load(model_file)
         model = self.model.to(self.device)
         if data_parallel: # use Data Parallelism with Multi-GPU
@@ -104,6 +106,6 @@ class Trainer(object):
 
     def save(self, i):
         """ save current model """
+        torch.save(self.model, os.path.join(self.save_dir, 'backbone.pt'))
         torch.save(self.model.state_dict(), # save model object before nn.DataParallel
             os.path.join(self.save_dir, 'model_steps_'+str(i)+'.pt'))
-
