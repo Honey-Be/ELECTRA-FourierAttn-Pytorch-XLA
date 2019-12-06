@@ -1,5 +1,49 @@
 # ELECTRA-Pytorch
 
+Well this embarassing you had to see this repo : a fork from BERT and fork again from ALBERT for ELECTRA.
+
+Anyway this is a comparison between mask and electra pretraining method
+
+
+Mask Language pretraining:
+
+```
+python pretrain.py \
+        --name 'baseline' \
+        --data_file './data/wiki.train.tokens' \
+        --vocab './data/vocab.txt' \
+        --mode 'mask' \
+        --train_cfg './config/pretrain_mask.json' \
+        --model_cfg './config/albert_base.json' \
+        --generator_cfg './config/generator_base.json' \
+        --max_pred 75 --mask_prob 0.15 \
+        --mask_alpha 4 --mask_beta 1 --max_gram 3 \
+        --save_dir './saved' \
+        --log_dir './logs'
+```
+
+Electra language pretraining:
+
+```
+python pretrain.py \
+        --name 'electra' \
+        --mode 'electra' \
+        --data_file './data/wiki.train.tokens' \
+        --vocab './data/vocab.txt' \
+        --train_cfg './config/pretrain_electra.json' \
+        --model_cfg './config/albert_base.json' \
+        --generator_cfg './config/generator_base.json' \
+        --max_pred 75 --mask_prob 0.15 \
+        --mask_alpha 4 --mask_beta 1 --max_gram 3 \
+        --save_dir './saved' \
+        --log_dir './logs'    
+
+```
+
+
+## Original fork content
+
+
 ~~Simply implementation of [ALBERT(A LITE BERT FOR SELF-SUPERVISED LEARNING OF LANGUAGE REPRESENTATIONS)](https://arxiv.org/pdf/1909.11942.pdf) in Pytorch. This implementation is based on clean [dhlee347](https://github.com/dhlee347)/[pytorchic-bert](https://github.com/dhlee347/pytorchic-bert) code.~~~
 
 
