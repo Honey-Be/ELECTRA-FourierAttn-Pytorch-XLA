@@ -180,3 +180,13 @@ class Transformer(nn.Module):
 
         return h
 
+
+if __name__ == "__main__":
+    model_cfg = Config.from_json('./config/albert_base.json')
+    model = Transformer(model_cfg)
+    pytorch_total_params = sum(p.numel() for p in model.parameters())/1000000
+    print("Discriminator    {:2.3f}M".format(pytorch_total_params))
+    model_cfg = Config.from_json('./config/generator_base.json')
+    model = Transformer(model_cfg)
+    pytorch_total_params = sum(p.numel() for p in model.parameters())/1000000
+    print("Generator        {:2.3f}M".format(pytorch_total_params))

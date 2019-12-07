@@ -246,4 +246,6 @@ if __name__ == '__main__':
             Accuracy:   0.682   0.682
     '''
     main(pretrain_file='./saved/d_model_steps_40000.pt')
-    main(mode='eval', model_file='saved/mrpc/model_steps_1377.pt')
+    main(mode='eval', 
+        data_file='./data/MRPC/dev.tsv',
+        model_file='saved/mrpc/model_steps_1377.pt')
