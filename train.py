@@ -49,14 +49,16 @@ def generator_loss(model, batch, global_step, optimizer, cross_ent, sent_cross_e
 
 
 def discriminator_loss(generator, discriminator, batch, global_step, optimizer, cross_ent, sent_cross_ent, writer=None, prefix='pretrain'): # make sure loss is tensor
-    input_ids, segment_ids, input_mask, _, _, _, is_next, original_ids = batch
-    with torch.no_grad():
-        generator.eval()
-        h = generator.transformer(input_ids, segment_ids, input_mask)
-        logits_lm = generator.decoder2(generator.decoder1(h)) + generator.decoder_bias
-        generator.train()
-    input_ids = torch.argmax(logits_lm, dim=2)
-    is_replaced = Variable((input_ids != original_ids).float())
+    # input_ids is the output of generator
+    #   0           1           2           3
+    masked_ids, segment_ids, input_mask, input_ids, _, _, is_next, original_ids = batch
+    masked_label = (masked_ids.long() != original_ids)
+
+    # replace the non masked generator token with the original token
+    non_masked_label = (masked_ids == original_ids) 
+    input_ids[non_masked_label] = original_ids[non_masked_label]
+
+    is_replaced = Variable((input_ids.long() != original_ids.long()).float())
     is_replaced = is_replaced.cuda()
 
     logits_lm, logits_clsf = discriminator(input_ids, segment_ids, input_mask)
@@ -71,6 +73,12 @@ def discriminator_loss(generator, discriminator, batch, global_step, optimizer, 
                         'loss_sop': loss_sop.item(),
                         'loss_total': (loss_lm + loss_sop).item(),
                         'lr': optimizer.get_lr()[0],
+                        },
+                        global_step)
+        writer.add_scalars(prefix+'/stats',
+                        {
+                            'replaced': is_replaced.sum().item()/len(input_ids),
+                            'masked': masked_label.sum().item()/len(input_ids),
                         },
                         global_step)
     return loss_lm + loss_sop, loss_lm, loss_sop
@@ -127,18 +135,19 @@ class Trainer(object):
         self.model.eval() # evaluation mode
         self.load(model_file, None)
         model = self.model.to(self.device)
-        if data_parallel: # use Data Parallelism with Multi-GPU
-            model = nn.DataParallel(model)
+        with torch.no_grad():
+            if data_parallel: # use Data Parallelism with Multi-GPU
+                model = nn.DataParallel(model)
 
-        results = [] # prediction results
-        iter_bar = tqdm(self.data_iter, desc='Iter (loss=X.XXX)')
-        for batch in iter_bar:
-            batch = [t.to(self.device) for t in batch]
-            with torch.no_grad(): # evaluation without gradient calculation
-                accuracy, result = evaluate(model, batch) # accuracy to print
-            results.append(result)
+            results = [] # prediction results
+            iter_bar = tqdm(self.data_iter, desc='Iter (loss=X.XXX)')
+            for batch in iter_bar:
+                batch = [t.to(self.device) for t in batch]
+                with torch.no_grad(): # evaluation without gradient calculation
+                    accuracy, result = evaluate(model, batch) # accuracy to print
+                results.append(result)
 
-            iter_bar.set_description('Iter(acc=%5.3f)'%accuracy)
+                iter_bar.set_description('Iter(acc=%5.3f)'%accuracy)
         return results
 
     def load(self, model_file, pretrain_file):
@@ -264,10 +273,9 @@ class AdversarialTrainer(object):
         self.ratio = ratio
         self.save_dir = save_dir
         self.device = device # device name
-        self.d_bce_loss = nn.BCEWithLogitsLoss()
+        self.d_bce_loss = nn.BCEWithLogitsLoss(reduction='none')
         self.cross_ent = nn.CrossEntropyLoss(reduction='none')
         self.sent_cross_ent = nn.CrossEntropyLoss()
-
 
     def train(self, writer=None, model_file=None, data_parallel=False):
         """ Train Loop """
@@ -288,7 +296,7 @@ class AdversarialTrainer(object):
                 batch = [t.to(self.device) for t in batch]
 
                 self.optimizer.zero_grad()
-                g_loss, _, _ = generator_loss(generator, batch, global_step, 
+                g_loss, generate_logits, _ = generator_loss(generator, batch, global_step, 
                     self.optimizer,
                     self.cross_ent, self.sent_cross_ent,
                     writer, prefix='train'
@@ -299,6 +307,7 @@ class AdversarialTrainer(object):
 
                 global_step += 1
                 # self.d_optimizer.zero_grad()
+                batch[3] = torch.argmax(generate_logits, dim=2).detach()
                 _, lm_loss, nsp_loss = discriminator_loss(generator, discriminator, batch, global_step, 
                     self.optimizer,
                     self.d_bce_loss, self.sent_cross_ent,

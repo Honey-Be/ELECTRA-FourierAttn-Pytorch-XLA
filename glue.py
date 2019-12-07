@@ -233,17 +233,17 @@ def main(task='mrpc',
 
         results = trainer.eval(evaluate, model_file, data_parallel)
         total_accuracy = torch.cat(results).mean().item()
-        print('Accuracy: {:.3f}'.format(total_accuracy))
+        print('\nAccuracy: {:.3f}'.format(total_accuracy))
 
 
 if __name__ == '__main__':
     '''
-        mrpc        
-            d_model_steps_10000: 
-            Accuracy: 0.678
+        mrpc : 76.6/83.0
+            electra : 30000 40000
+            Accuracy: 0.674 0.674
             
-            model_steps_10000
-            Accuracy: 0.674
+            masked  :   40000   50000
+            Accuracy:   0.682   0.682
     '''
-    main(pretrain_file='./saved/d_model_steps_10000.pt')
-    main(mode='eval', model_file='saved/mrpc/model_steps_345.pt')
+    main(pretrain_file='./saved/d_model_steps_40000.pt')
+    main(mode='eval', model_file='saved/mrpc/model_steps_1377.pt')
