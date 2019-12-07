@@ -73,7 +73,7 @@ def discriminator_loss(generator, discriminator, batch, global_step, optimizer, 
                         'lr': optimizer.get_lr()[0],
                         },
                         global_step)
-    return loss_lm + loss_sop, logits_lm, loss_sop
+    return loss_lm + loss_sop, loss_lm, loss_sop
 
 
 class Trainer(object):
@@ -298,22 +298,24 @@ class AdversarialTrainer(object):
                     g_loss.mean()
 
                 global_step += 1
-                loss_sum += g_loss.item()
-
                 # self.d_optimizer.zero_grad()
-                d_loss, _, _ = discriminator_loss(generator, discriminator, batch, global_step, 
+                _, lm_loss, nsp_loss = discriminator_loss(generator, discriminator, batch, global_step, 
                     self.optimizer,
                     self.d_bce_loss, self.sent_cross_ent,
                     writer, prefix='train')
-
+                d_loss = lm_loss*self.ratio + nsp_loss
                 if data_parallel:
                     d_loss.mean()
-                total_loss = g_loss+d_loss*self.ratio
+
+                total_loss = g_loss + d_loss
+
+                loss_sum += total_loss.item()
+
                 total_loss.backward()
 
                 self.optimizer.step()
 
-                iter_bar.set_description('Iter (d_loss=%5.3f,g_loss=%5.3f' % (d_loss.item(),g_loss.item()))
+                iter_bar.set_description('(d_loss: {:5.3f}, g_loss: {:5.3f}, loss: {:5.3f})'.format( d_loss.item(), g_loss.item(), float(total_loss.item()) ) )
 
                 if global_step % self.cfg.save_steps == 0: # save
                     self.save(global_step)

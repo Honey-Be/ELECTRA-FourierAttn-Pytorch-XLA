@@ -327,7 +327,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_file', type=str, default='./data/wiki.train.tokens')
     parser.add_argument('--vocab', type=str, default='./data/vocab.txt')
     parser.add_argument('--name', type=str, default='baseline')
-    parser.add_argument('--ratio', type=float, default=1)
+    parser.add_argument('--ratio', type=float, default=50)
     parser.add_argument('--mode', type=str, choices=['mask','electra'], default='mask')
     parser.add_argument('--train_cfg', type=str, default='./config/pretrain.json')
     parser.add_argument('--generator_cfg', type=str, default='./config/albert_unittest.json')
