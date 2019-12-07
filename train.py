@@ -97,7 +97,7 @@ class Trainer(object):
         global_step = 0 # global iteration steps regardless of epochs
         for e in range(self.cfg.n_epochs):
             loss_sum = 0. # the sum of iteration losses to get average loss in every epoch
-            iter_bar = tqdm(self.data_iter, desc='Iter (loss=X.XXX)')
+            iter_bar = tqdm(self.data_iter, desc='Iter (loss=X.XXX)', dynamic_ncols=True)
             for i, batch in enumerate(iter_bar):
                 batch = [t.to(self.device) for t in batch]
 

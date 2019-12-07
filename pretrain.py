@@ -13,6 +13,7 @@ import torch.nn as nn
 import argparse
 from tensorboardX import SummaryWriter
 import os
+import multiprocessing as mp
 import tokenization
 import models
 import optim
@@ -116,7 +117,7 @@ class ELECTRA():
                                     pipeline=pipeline), 
                                 batch_size=cfg.batch_size, 
                                 collate_fn=seq_collate,
-                                num_workers=8)
+                                num_workers=mp.cpu_count())
 
         discriminator = Discriminator(model_cfg)
         generator = Generator(generator_cfg)
@@ -154,11 +155,14 @@ class MaskTrainer():
                                         args.mask_alpha,
                                         args.mask_beta,
                                         args.max_gram)]
-        data_iter = SentPairDataLoader(args.data_file,
+        data_iter = DataLoader(SentPairDataset(args.data_file,
                                     cfg.batch_size,
                                     tokenize,
                                     model_cfg.max_len,
-                                    pipeline=pipeline)
+                                    pipeline=pipeline), 
+                                batch_size=cfg.batch_size, 
+                                collate_fn=seq_collate,
+                                num_workers=mp.cpu_count())
 
         model = Generator(model_cfg)
 
