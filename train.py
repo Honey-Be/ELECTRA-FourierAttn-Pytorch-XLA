@@ -38,7 +38,7 @@ def generator_loss(model, batch, global_step, optimizer, cross_ent, sent_cross_e
     loss_sop = sent_cross_ent(logits_clsf, is_next) # for sentence classification
 
     if writer:
-        writer.add_scalars(prefix+'/D',
+        writer.add_scalars(prefix+'/G',
                         {'loss_lm': loss_lm.item(),
                         'loss_sop': loss_sop.item(),
                         'loss_total': (loss_lm + loss_sop).item(),
@@ -63,7 +63,7 @@ def discriminator_loss(generator, discriminator, batch, global_step, optimizer, 
     loss_sop = sent_cross_ent(logits_clsf, is_next) # for sentence classification
 
     if writer:
-        writer.add_scalars(prefix+'/G',
+        writer.add_scalars(prefix+'/D',
                         {'loss_lm': loss_lm.item(),
                         'loss_sop': loss_sop.item(),
                         'loss_total': (loss_lm + loss_sop).item(),
