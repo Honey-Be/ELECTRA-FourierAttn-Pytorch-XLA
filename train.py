@@ -10,7 +10,7 @@ import os
 import json
 from typing import NamedTuple
 from tqdm import tqdm
-
+from torch.autograd import Variable
 import torch
 import torch.nn as nn
 
@@ -51,14 +51,17 @@ def generator_loss(model, batch, global_step, optimizer, cross_ent, sent_cross_e
 def discriminator_loss(generator, discriminator, batch, global_step, optimizer, cross_ent, sent_cross_ent, writer=None, prefix='pretrain'): # make sure loss is tensor
     input_ids, segment_ids, input_mask, _, _, _, is_next, original_ids = batch
     with torch.no_grad():
+        generator.eval()
         h = generator.transformer(input_ids, segment_ids, input_mask)
         logits_lm = generator.decoder2(generator.decoder1(h)) + generator.decoder_bias
+        generator.train()
     input_ids = torch.argmax(logits_lm, axis=2)
-    is_replaced = (input_ids == original_ids).long()
+    is_replaced = Variable((input_ids != original_ids).float())
     is_replaced = is_replaced.cuda()
 
     logits_lm, logits_clsf = discriminator(input_ids, segment_ids, input_mask)
-    loss_lm = cross_ent(logits_lm.transpose(1, 2), is_replaced) # for masked LM
+    logits_lm = logits_lm.squeeze(-1)
+    loss_lm = cross_ent(logits_lm, is_replaced) # for masked LM
     loss_lm = loss_lm.mean()
     loss_sop = sent_cross_ent(logits_clsf, is_next) # for sentence classification
 
@@ -164,15 +167,16 @@ class MLMTrainer(object):
 
 class AdversarialTrainer(object):
     """Training Helper Class"""
-    def __init__(self, cfg, discriminator, generator, data_iter, d_optimizer, g_optimizer, save_dir, device):
+    def __init__(self, cfg, discriminator, generator, data_iter, optimizer, ratio, save_dir, device):
         self.cfg = cfg # config for training : see class Config
         self.discriminator = discriminator
         self.generator = generator
         self.data_iter = data_iter # iterator to load data
-        self.d_optimizer = d_optimizer
-        self.g_optimizer = g_optimizer
+        self.optimizer = optimizer
+        self.ratio = ratio
         self.save_dir = save_dir
         self.device = device # device name
+        self.d_bce_loss = nn.BCEWithLogitsLoss()
         self.cross_ent = nn.CrossEntropyLoss(reduction='none')
         self.sent_cross_ent = nn.CrossEntropyLoss()
 
@@ -195,29 +199,30 @@ class AdversarialTrainer(object):
             for i, batch in enumerate(iter_bar):
                 batch = [t.to(self.device) for t in batch]
 
-                self.g_optimizer.zero_grad()
+                self.optimizer.zero_grad()
                 g_loss, _, _ = generator_loss(generator, batch, global_step, 
-                    self.g_optimizer,
+                    self.optimizer,
                     self.cross_ent, self.sent_cross_ent,
                     writer, prefix='train'
                     )
-                g_loss.backward()
+                # g_loss.backward()
                 if data_parallel:
                     g_loss.mean()
-                self.g_optimizer.step()
 
                 global_step += 1
                 loss_sum += g_loss.item()
 
-                self.d_optimizer.zero_grad()
+                # self.d_optimizer.zero_grad()
                 d_loss, _, _ = discriminator_loss(generator, discriminator, batch, global_step, 
-                    self.d_optimizer,
-                    self.cross_ent, self.sent_cross_ent,
+                    self.optimizer,
+                    self.d_bce_loss, self.sent_cross_ent,
                     writer, prefix='train')
                 if data_parallel:
                     d_loss.mean()
+                total_loss = g_loss+d_loss*self.ratio
+                total_loss.backward()
 
-                self.d_optimizer.step()
+                self.optimizer.step()
 
                 iter_bar.set_description('Iter (d_loss=%5.3f,g_loss=%5.3f' % (d_loss.item(),g_loss.item()))
 

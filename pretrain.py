@@ -226,24 +226,14 @@ class Discriminator(nn.Module):
 
         # decoder is shared with embedding layer
         ## project hidden layer to embedding layer
-        embed_weight2 = self.transformer.embed.tok_embed2.weight
-        n_hidden, n_embedding = embed_weight2.size()
-        self.decoder1 = nn.Linear(n_hidden, n_embedding, bias=False)
-        self.decoder1.weight.data = embed_weight2.data.t()
-
-        ## project embedding layer to vocabulary layer
-        embed_weight1 = self.transformer.embed.tok_embed1.weight
-        n_vocab, n_embedding = embed_weight1.size()
-        self.discriminator = nn.Linear(n_embedding, 2, bias=False)
-        self.discriminator.weight = embed_weight1
-
-        self.decoder_bias = nn.Parameter(torch.zeros(n_vocab))
+        self.discriminator = nn.Linear(cfg.hidden, 1, bias=False)
+        # self.discriminator.weight = embed_weight1
 
     def forward(self, input_ids, segment_ids, input_mask):
         h = self.transformer(input_ids, segment_ids, input_mask)
         cls_h = self.activ1(self.fc(h[:, 0]))
 
-        logits = self.discriminator(self.decoder1(h)) + self.decoder_bias
+        logits = self.discriminator(h)
         logits_clsf = self.classifier(cls_h)
 
         return logits, logits_clsf
@@ -278,15 +268,12 @@ class ELECTRA():
         discriminator = Discriminator(model_cfg)
         generator = Generator(generator_cfg)
 
-        self.cross_ent = nn.CrossEntropyLoss(reduction='none')
-        self.sent_cross_ent = nn.CrossEntropyLoss()
-
-        self.d_optimizer = optim.optim4GPU(cfg, discriminator)
-        self.g_optimizer = optim.optim4GPU(cfg, generator)
+        self.optimizer = optim.optim4GPU(cfg, generator, discriminator)
+        # self.g_optimizer = optim.optim4GPU(cfg, generator)
         self.trainer = train.AdversarialTrainer(cfg, 
             discriminator, generator, 
             data_iter, 
-            self.d_optimizer, self.g_optimizer, args.save_dir, get_device())
+            self.optimizer, args.ratio, args.save_dir, get_device())
         os.makedirs(os.path.join(args.log_dir, args.name), exist_ok=True)
         self.writer = SummaryWriter(log_dir=os.path.join(args.log_dir, args.name)) # for tensorboardX
 
@@ -340,6 +327,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_file', type=str, default='./data/wiki.train.tokens')
     parser.add_argument('--vocab', type=str, default='./data/vocab.txt')
     parser.add_argument('--name', type=str, default='baseline')
+    parser.add_argument('--ratio', type=float, default=1)
     parser.add_argument('--mode', type=str, choices=['mask','electra'], default='mask')
     parser.add_argument('--train_cfg', type=str, default='./config/pretrain.json')
     parser.add_argument('--generator_cfg', type=str, default='./config/albert_unittest.json')

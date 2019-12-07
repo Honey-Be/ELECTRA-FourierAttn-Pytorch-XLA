@@ -36,8 +36,7 @@ python pretrain.py \
         --max_pred 75 --mask_prob 0.15 \
         --mask_alpha 4 --mask_beta 1 --max_gram 3 \
         --save_dir './saved' \
-        --log_dir './logs'    
-
+        --log_dir './logs'
 ```
 
 

@@ -149,9 +149,11 @@ class BertAdam(Optimizer):
 
 
 
-def optim4GPU(cfg, model):
+def optim4GPU(cfg, model, model2=None):
     """ optimizer for GPU training """
     param_optimizer = list(model.named_parameters())
+    if model2:
+        param_optimizer += list(model2.named_parameters())
     no_decay = ['bias', 'gamma', 'beta']
     optimizer_grouped_parameters = [
         {'params': [p for n, p in param_optimizer if n not in no_decay], 'weight_decay_rate': 0.01},
