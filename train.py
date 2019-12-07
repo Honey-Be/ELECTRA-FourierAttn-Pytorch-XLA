@@ -107,7 +107,7 @@ class MLMTrainer(object):
                 loss, loss_lm, _ = generator_loss(model, batch, global_step, 
                     self.optimizer,
                     self.cross_ent, self.sent_cross_ent,
-                    writer, prefix='baseline'
+                    writer, prefix='train'
                     )
                 if data_parallel:
                     loss = loss.mean()
@@ -199,7 +199,7 @@ class AdversarialTrainer(object):
                 g_loss, _, _ = generator_loss(generator, batch, global_step, 
                     self.g_optimizer,
                     self.cross_ent, self.sent_cross_ent,
-                    writer, prefix='electra'
+                    writer, prefix='train'
                     )
                 g_loss.backward()
                 if data_parallel:
@@ -213,7 +213,7 @@ class AdversarialTrainer(object):
                 d_loss, _, _ = discriminator_loss(generator, discriminator, batch, global_step, 
                     self.d_optimizer,
                     self.cross_ent, self.sent_cross_ent,
-                    writer, prefix='electra')
+                    writer, prefix='train')
                 if data_parallel:
                     d_loss.mean()
 
