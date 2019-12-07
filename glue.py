@@ -5,7 +5,6 @@
 
 import itertools
 import csv
-import fire
 
 import torch
 import torch.nn as nn
@@ -67,6 +66,16 @@ class MNLI(CsvDataset):
         for line in itertools.islice(lines, 1, None): # skip header
             yield line[-1], line[8], line[9] # label, text_a, text_b
 
+
+class SST(CsvDataset):
+    """ Dataset class for MNLI """
+    labels = ("contradiction", "entailment", "neutral") # label names
+    def __init__(self, file, pipeline=[]):
+        super().__init__(file, pipeline)
+
+    def get_instances(self, lines):
+        for line in itertools.islice(lines, 1, None): # skip header
+            yield line[-1], line[0] # label, text_a, text_b
 
 def dataset_class(task):
     """ Mapping from task string to Dataset Class """
@@ -154,10 +163,10 @@ class Classifier(nn.Module):
     def __init__(self, cfg, n_labels):
         super().__init__()
         self.transformer = models.Transformer(cfg)
-        self.fc = nn.Linear(cfg.dim, cfg.dim)
+        self.fc = nn.Linear(cfg.hidden, cfg.hidden)
         self.activ = nn.Tanh()
         self.drop = nn.Dropout(cfg.p_drop_hidden)
-        self.classifier = nn.Linear(cfg.dim, n_labels)
+        self.classifier = nn.Linear(cfg.hidden, n_labels)
 
     def forward(self, input_ids, segment_ids, input_mask):
         h = self.transformer(input_ids, segment_ids, input_mask)
@@ -172,12 +181,12 @@ class Classifier(nn.Module):
 def main(task='mrpc',
          train_cfg='config/train_mrpc.json',
          model_cfg='config/albert_base.json',
-         data_file='../glue/MRPC/train.tsv',
+         data_file='./data/MRPC/train.tsv',
          model_file=None,
-         pretrain_file='../uncased_L-12_H-768_A-12/bert_model.ckpt',
+         pretrain_file='./saved/d_model_steps_28194.pt',
          data_parallel=True,
-         vocab='../uncased_L-12_H-768_A-12/vocab.txt',
-         save_dir='../exp/bert/mrpc',
+         vocab='./data/vocab.txt',
+         save_dir='./saved/mrpc',
          max_len=128,
          mode='train'):
 
@@ -197,11 +206,11 @@ def main(task='mrpc',
 
     model = Classifier(model_cfg, len(TaskDataset.labels))
     criterion = nn.CrossEntropyLoss()
-
+    optimizer = optim.optim4GPU(cfg, model)
     trainer = train.Trainer(cfg,
                             model,
                             data_iter,
-                            optim.optim4GPU(cfg, model),
+                            optimizer,
                             save_dir, get_device())
 
     if mode == 'train':
@@ -224,8 +233,17 @@ def main(task='mrpc',
 
         results = trainer.eval(evaluate, model_file, data_parallel)
         total_accuracy = torch.cat(results).mean().item()
-        print('Accuracy:', total_accuracy)
+        print('Accuracy: {:.3f}'.format(total_accuracy))
 
 
 if __name__ == '__main__':
-    fire.Fire(main)
+    '''
+        mrpc        
+            d_model_steps_10000: 
+            Accuracy: 0.678
+            
+            model_steps_10000
+            Accuracy: 0.674
+    '''
+    main(pretrain_file='./saved/d_model_steps_10000.pt')
+    main(mode='eval', model_file='saved/mrpc/model_steps_345.pt')

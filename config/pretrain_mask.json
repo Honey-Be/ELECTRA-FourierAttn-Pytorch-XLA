@@ -1,8 +1,8 @@
 {
     "seed": 128,
-    "batch_size": 18,
+    "batch_size": 14,
     "lr": 1e-4,
-    "n_epochs": 50,
+    "n_epochs": 10,
     "warmup": 0.1,
     "save_steps": 10000,
     "total_steps": 1000000

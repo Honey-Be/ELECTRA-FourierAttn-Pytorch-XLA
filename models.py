@@ -24,7 +24,7 @@ class Config(NamedTuple):
     hidden: int = 768 # Dimension of Hidden Layer in Transformer Encoder
     hidden_ff: int = 768*4 # Dimension of Intermediate Layers in Positionwise Feedforward Net
     embedding: int = 128 # Factorized embedding parameterization
-
+    p_drop_hidden: float = 0.1 # finetune dropout
     n_layers: int = 12 # Numher of Hidden Layers
     n_heads: int = 768//64 # Numher of Heads in Multi-Headed Attention Layers
     #activ_fn: str = "gelu" # Non-linear Activation Function Type in Hidden Layers

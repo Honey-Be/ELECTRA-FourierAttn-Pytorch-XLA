@@ -1,8 +1,12 @@
-# ELECTRA-Pytorch
+# ELECTRA Pytorch reimplementation
 
-Well this embarassing you had to see this repo : a fork from BERT and fork again from ALBERT for ELECTRA.
+ELECTRA: Pre-training Text Encoders as Discriminators Rather Than Generators
 
-Anyway this is a comparison between mask and electra pretraining method
+Well this is embarassing you had to see this repo : a fork from BERT and fork again from ALBERT for ELECTRA. Anyway this is a comparison between mask and electra pretraining method
+
+At the time of re-implementation this paper is still under blind review:
+
+[Open Review](https://openreview.net/forum?id=r1xMH1BtvB)
 
 
 Mask Language pretraining:

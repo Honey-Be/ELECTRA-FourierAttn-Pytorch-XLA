@@ -14,3 +14,10 @@ __pycache__
 .idea
 dstc7.egg-info/*
 *.ipynb
+
+*.tokens
+*.tsv
+*.zip
+data/
+log/
+saved/
