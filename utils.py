@@ -166,9 +166,9 @@ def _sample_mask(seg, mask_alpha, mask_beta,
 
     tokens, masked_tokens, masked_pos = [], [], []
     for i in range(seg_len):
-        masked_tokens.append(seg[i])
-        masked_pos.append(i)
         if mask[i] and (seg[i] != '[CLS]' and seg[i] != '[SEP]'):
+            masked_tokens.append(seg[i])
+            masked_pos.append(i)
             tokens.append('[MASK]')
         else:
             tokens.append(seg[i])

@@ -5,16 +5,16 @@
 
 import itertools
 import csv
-
+import os
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
-
+from torch import optim
 import tokenization
 import models
-import optim
+# import optim
 import train
-
+import argparse
 from utils import set_seeds, get_device, truncate_tokens_pair
 
 class CsvDataset(Dataset):
@@ -68,18 +68,18 @@ class MNLI(CsvDataset):
 
 
 class SST(CsvDataset):
-    """ Dataset class for MNLI """
-    labels = ("contradiction", "entailment", "neutral") # label names
-    def __init__(self, file, pipeline=[]):
+    """ Dataset class for SST """
+    labels = ("0", "1") # label names
+    def __init__(self, file='data/', pipeline=[]):
         super().__init__(file, pipeline)
 
     def get_instances(self, lines):
         for line in itertools.islice(lines, 1, None): # skip header
-            yield line[-1], line[0] # label, text_a, text_b
+            yield line[-1], line[0], None # label, text_a, text_b
 
 def dataset_class(task):
     """ Mapping from task string to Dataset Class """
-    table = {'mrpc': MRPC, 'mnli': MNLI}
+    table = {'mrpc': MRPC, 'sst': SST}
     return table[task]
 
 
@@ -164,14 +164,16 @@ class Classifier(nn.Module):
         super().__init__()
         self.transformer = models.Transformer(cfg)
         self.fc = nn.Linear(cfg.hidden, cfg.hidden)
-        self.activ = nn.Tanh()
+        self.activ = nn.ReLU()
         self.drop = nn.Dropout(cfg.p_drop_hidden)
+        self.pool = nn.AdaptiveMaxPool1d(1)
         self.classifier = nn.Linear(cfg.hidden, n_labels)
 
     def forward(self, input_ids, segment_ids, input_mask):
         h = self.transformer(input_ids, segment_ids, input_mask)
         # only use the first h in the sequence
-        pooled_h = self.activ(self.fc(h[:, 0]))
+        h = self.pool(h.transpose(1, 2)).squeeze(-1)
+        pooled_h = self.activ(self.fc(h))
         logits = self.classifier(self.drop(pooled_h))
         return logits
 
@@ -183,7 +185,7 @@ def main(task='mrpc',
          model_cfg='config/albert_base.json',
          data_file='./data/MRPC/train.tsv',
          model_file=None,
-         pretrain_file='./saved/d_model_steps_28194.pt',
+         pretrain_file=None,
          data_parallel=True,
          vocab='./data/vocab.txt',
          save_dir='./saved/mrpc',
@@ -205,8 +207,9 @@ def main(task='mrpc',
     data_iter = DataLoader(dataset, batch_size=cfg.batch_size, shuffle=True)
 
     model = Classifier(model_cfg, len(TaskDataset.labels))
+    model.train()
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.optim4GPU(cfg, model)
+    optimizer = optim.Adam(model.parameters(), lr=cfg.lr, betas=(0.9, 0.999), eps=1e-06)
     trainer = train.Trainer(cfg,
                             model,
                             data_iter,
@@ -233,19 +236,40 @@ def main(task='mrpc',
 
         results = trainer.eval(evaluate, model_file, data_parallel)
         total_accuracy = torch.cat(results).mean().item()
-        print('\nAccuracy: {:.3f}'.format(total_accuracy))
-
+        print('\n-----------------------------')
+        print('[{}] Accuracy: {:.3f}'.format(task, total_accuracy))
+        print('-----------------------------\n')
 
 if __name__ == '__main__':
     '''
         mrpc : 76.6/83.0
-            electra : 30000 40000
-            Accuracy: 0.674 0.674
+            random weight init
+            Accuracy: 0.701
+
+            electra : 150000
+            Accuracy: 0.701
             
-            masked  :   40000   50000
-            Accuracy:   0.682   0.682
+            masked  :   200000
+            Accuracy:   0.699
     '''
-    main(pretrain_file='./saved/d_model_steps_40000.pt')
+    parser = argparse.ArgumentParser(description='GLUE Score')
+    parser.add_argument('--pretrain', type=str, default='./saved/d_model_steps_150000.pt')
+    parser.add_argument('--task', type=str, default='mrpc', choices=['mrpc', 'sst'])
+    parser.add_argument('--cfg', type=str, default='config/train_mrpc.json')
+    parser.add_argument('--train', type=str, default='./data/MRPC/train.tsv')
+    parser.add_argument('--eval', type=str, default='./data/MRPC/dev.tsv')
+
+    args = parser.parse_args()
+    cfg = train.Config.from_json(args.cfg)
+    os.makedirs(os.path.join('saved', args.task), exist_ok=True)
+
+    main(mode='train',
+        task=args.task,
+        # pretrain_file=args.pretrain,
+        data_file=args.train,
+        train_cfg=args.cfg,
+        )
     main(mode='eval', 
-        data_file='./data/MRPC/dev.tsv',
-        model_file='saved/mrpc/model_steps_1377.pt')
+        task=args.task,
+        data_file=args.eval,
+        model_file='saved/{}/model_steps_{}.pt'.format(args.task, cfg.total_steps))
