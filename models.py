@@ -134,22 +134,22 @@ class PositionWiseFeedForward(nn.Module):
         return self.fc2(gelu(self.fc1(x)))
 
 
-# class Block(nn.Module):
-#     """ Transformer Block """
-#     def __init__(self, cfg):
-#         super().__init__()
-#         self.attn = MultiHeadedSelfAttention(cfg)
-#         self.proj = nn.Linear(cfg.hidden, cfg.hidden)
-#         self.norm1 = LayerNorm(cfg)
-#         self.pwff = PositionWiseFeedForward(cfg)
-#         self.norm2 = LayerNorm(cfg)
-#         self.drop = nn.Dropout(cfg.p_drop_hidden)
-#
-#     def forward(self, x, mask):
-#         h = self.attn(x, mask)
-#         h = self.norm1(x + self.drop(self.proj(h)))
-#         h = self.norm2(h + self.drop(self.pwff(h)))
-#         return h
+class Block(nn.Module):
+    """ Transformer Block """
+    def __init__(self, cfg):
+        super().__init__()
+        self.attn = MultiHeadedSelfAttention(cfg)
+        self.proj = nn.Linear(cfg.hidden, cfg.hidden)
+        self.norm1 = LayerNorm(cfg)
+        self.pwff = PositionWiseFeedForward(cfg)
+        self.norm2 = LayerNorm(cfg)
+        self.drop = nn.Dropout(cfg.p_drop_hidden)
+
+    def forward(self, x, mask):
+        h = self.attn(x, mask)
+        h = self.norm1(x + self.drop(self.proj(h)))
+        h = self.norm2(h + self.drop(self.pwff(h)))
+        return h
 
 
 class Transformer(nn.Module):
@@ -162,21 +162,13 @@ class Transformer(nn.Module):
 
         # To used parameter-sharing strategies
         self.n_layers = cfg.n_layers
-        self.attn = MultiHeadedSelfAttention(cfg)
-        self.proj = nn.Linear(cfg.hidden, cfg.hidden)
-        self.norm1 = LayerNorm(cfg)
-        self.pwff = PositionWiseFeedForward(cfg)
-        self.norm2 = LayerNorm(cfg)
-        # self.drop = nn.Dropout(cfg.p_drop_hidden)
+        self.block = Block(cfg)
 
     def forward(self, x, seg, mask):
         h = self.embed(x, seg)
 
         for _ in range(self.n_layers):
-            # h = block(h, mask)
-            h = self.attn(h, mask)
-            h = self.norm1(h + self.proj(h))
-            h = self.norm2(h + self.pwff(h))
+            h = self.block(h, mask)
 
         return h
 
