@@ -221,6 +221,7 @@ def main(task='mrpc',
             input_ids, segment_ids, input_mask, label_id = batch
             logits = model(input_ids, segment_ids, input_mask)
             loss = criterion(logits, label_id)
+            del logits
             return loss
 
         trainer.train(get_loss, model_file, pretrain_file, data_parallel)
@@ -230,6 +231,7 @@ def main(task='mrpc',
             input_ids, segment_ids, input_mask, label_id = batch
             logits = model(input_ids, segment_ids, input_mask)
             _, label_pred = logits.max(1)
+            del logits
             result = (label_pred == label_id).float() #.cpu().numpy()
             accuracy = result.mean()
             return accuracy, result

@@ -34,6 +34,7 @@ class Config(NamedTuple):
 def generator_loss(model, batch, global_step, optimizer, cross_ent, sent_cross_ent, writer=None, prefix='pretrain'): # make sure loss is tensor
     input_ids, segment_ids, input_mask, masked_ids, masked_pos, masked_weights, is_next, _ = batch
     logits_lm, logits_clsf = model(input_ids, segment_ids, input_mask, masked_pos)
+    del input_ids, segment_ids, input_mask, masked_pos
     loss_lm = cross_ent(logits_lm.transpose(1, 2), masked_ids) # for masked LM
     loss_lm = (loss_lm*masked_weights.float()).mean()
     loss_sop = sent_cross_ent(logits_clsf, is_next) # for sentence classification
@@ -116,6 +117,7 @@ class Trainer(object):
 
                 global_step = global_step + 1
                 loss_detached = loss.detach()
+                del loss
                 loss_sum = loss_sum + loss_detached
                 iter_bar.set_description('Iter (loss=%5.3f)'%loss_detached)
 
@@ -215,9 +217,12 @@ class MLMTrainer(object):
                 with torch.autograd.detect_anomaly():
                     loss.backward()
 
+                loss_detached = loss.detach()
+                del loss
+
                 global_step += 1
-                loss_sum = loss_sum + loss.detach()
-                iter_bar.set_description('Iter (loss=%5.3f)'%loss.item())
+                loss_sum = loss_sum + loss_detached
+                iter_bar.set_description('Iter (loss=%5.3f)'%loss_detached)
 
                 if global_step % self.cfg.save_steps == 0: # save
                     self.save(global_step)
@@ -326,6 +331,7 @@ class AdversarialTrainer(object):
                 self.optimizer.step()
 
                 iter_bar.set_description('(d_loss: {:5.3f}, g_loss: {:5.3f}, loss: {:5.3f})'.format( float(d_loss.detach()), float(g_loss.detach()), float(total_loss.detach()) ) )
+                del total_loss
 
                 if global_step % self.cfg.save_steps == 0: # save
                     self.save(global_step)
