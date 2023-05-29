@@ -53,16 +53,15 @@ class FourierAttention(nn.Module):
         B, H, S, W = q.shape
         weights = torch.zeros((B, H, S, S), device=x.device)
         r = torch.tensor(self.r, device=x.device)
-        with torch.autograd.detect_anomaly():
-            for l in range(S):
-                for i in range(S):
-                    weights[:,:,l,i] = kernel(q[:,:,l], k[:,:,i], r)
-            if mask is not None:
-                mask = mask[:, None, None, :].float()
-                weights -= 10000.0 * (1.0 - mask)
-            #scores = self.drop(F.softmax(scores, dim=-1))
-            weights = F.softmax(weights, dim=-1)
-            # (B, H, S, S) @ (B, H, S, W) -> (B, H, S, W) -trans-> (B, S, H, W)
+        for l in range(S):
+            for i in range(S):
+                weights[:,:,l,i] = kernel(q[:,:,l], k[:,:,i], r)
+        if mask is not None:
+            mask = mask[:, None, None, :].float()
+            weights -= 10000.0 * (1.0 - mask)
+        #scores = self.drop(F.softmax(scores, dim=-1))
+        weights = F.softmax(weights, dim=-1)
+        # (B, H, S, S) @ (B, H, S, W) -> (B, H, S, W) -trans-> (B, S, H, W)
         y = (weights @ v)
         with torch.autograd.detect_anomaly():
             weight_sum = weights.sum(dim=-1)
