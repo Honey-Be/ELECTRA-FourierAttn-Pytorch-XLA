@@ -37,9 +37,10 @@ class FourierAttention(nn.Module):
         B, H, S, W = q.shape
         weights = torch.zeros((B, H, S, S)).cuda()
         r = torch.tensor(self.r).cuda()
-        for l in range(S):
-            for i in range(S):
-                weights[:,:,l,i] = torch.prod(torch.pow(torch.sinc(torch.mul(r, q[:,:,l]-k[:,:,i])), 4), dim=-1)
+        with torch.no_grad():
+            for l in range(S):
+                for i in range(S):
+                    weights[:,:,l,i] = torch.prod(torch.pow(torch.sinc(torch.mul(r, q[:,:,l]-k[:,:,i])), 4), dim=-1)
         if mask is not None:
             mask = mask[:, None, None, :].float()
             weights = weights - 10000.0 * (1.0 - mask)
@@ -48,8 +49,9 @@ class FourierAttention(nn.Module):
         # (B, H, S, S) @ (B, H, S, W) -> (B, H, S, W) -trans-> (B, S, H, W)
         y = (weights @ v)
         weight_sum = weights.sum(dim=-1)
-        for w in range(W):
-            y[:,:,:,w] = torch.div(y[:,:,:,w],weight_sum)        
+        with torch.no_grad():
+            for w in range(W):
+                y[:,:,:,w] = torch.div(y[:,:,:,w],weight_sum)        
         y = y.transpose(1, 2).contiguous()
         # -merge-> (B, S, D)
         h = merge_last(y, 2)
