@@ -58,7 +58,7 @@ class FourierAttention(nn.Module):
                 weights[:,:,l,i] = kernel(q[:,:,l], k[:,:,i], r)
         if mask is not None:
             mask = mask[:, None, None, :].float()
-            weights -= 10000.0 * (1.0 - mask)
+            weights = weights - 10000.0 * (1.0 - mask)
         #scores = self.drop(F.softmax(scores, dim=-1))
         weights = F.softmax(weights, dim=-1)
         # (B, H, S, S) @ (B, H, S, W) -> (B, H, S, W) -trans-> (B, S, H, W)
