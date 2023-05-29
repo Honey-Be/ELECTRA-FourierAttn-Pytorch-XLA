@@ -32,6 +32,7 @@ class Config(NamedTuple):
     #activ_fn: str = "gelu" # Non-linear Activation Function Type in Hidden Layers
     max_len: int = 512 # Maximum Length for Positional Embeddings
     n_segments: int = 2 # Number of Sentence Segments
+    r: float = 1.125
 
     @classmethod
     def from_json(cls, file):
@@ -41,6 +42,21 @@ class Config(NamedTuple):
 def gelu(x):
     "Implementation of the gelu activation function by Hugging Face"
     return x * 0.5 * (1.0 + torch.erf(x / math.sqrt(2.0)))
+
+
+class LayerNorm(nn.Module):
+    "A layernorm module in the TF style (epsilon inside the square root)."
+    def __init__(self, cfg, variance_epsilon=1e-12):
+        super().__init__()
+        self.gamma = nn.Parameter(torch.ones(cfg.hidden))
+        self.beta  = nn.Parameter(torch.zeros(cfg.hidden))
+        self.variance_epsilon = variance_epsilon
+
+    def forward(self, x):
+        u = x.mean(-1, keepdim=True)
+        s = (x - u).pow(2).mean(-1, keepdim=True)
+        x = (x - u) / torch.sqrt(s + self.variance_epsilon)
+        return self.gamma * x + self.beta
 
 
 class Embeddings(nn.Module):
@@ -57,12 +73,12 @@ class Embeddings(nn.Module):
         self.pos_embed = nn.Embedding(cfg.max_len, cfg.hidden) # position embedding
         self.seg_embed = nn.Embedding(cfg.n_segments, cfg.hidden) # segment(token type) embedding
 
-        self.norm = nn.LayerNorm(cfg.hidden)
+        self.norm = LayerNorm(cfg)
         # self.drop = nn.Dropout(cfg.p_drop_hidden)
 
     def forward(self, x, seg):
         seq_len = x.size(1)
-        pos = torch.arange(seq_len, dtype=torch.long, device=x.device)
+        pos = torch.arange(seq_len, dtype=torch.int64, device=x.device)
         pos = pos.unsqueeze(0).expand_as(x) # (S,) -> (B, S)
 
         # factorized embedding
@@ -92,9 +108,9 @@ class FourierBlock(nn.Module):
         super().__init__()
         self.attn = FourierAttention(cfg)
         self.proj = nn.Linear(cfg.hidden, cfg.hidden)
-        self.norm1 = nn.LayerNorm(cfg.hidden)
+        self.norm1 = LayerNorm(cfg)
         self.pwff = PositionWiseFeedForward(cfg)
-        self.norm2 = nn.LayerNorm(cfg.hidden)
+        self.norm2 = LayerNorm(cfg)
         self.drop = nn.Dropout(cfg.p_drop_hidden)
 
     def forward(self, x, mask):

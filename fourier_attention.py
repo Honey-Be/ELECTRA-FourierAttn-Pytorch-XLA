@@ -47,7 +47,7 @@ class FourierAttentionKernel(torch.autograd.Function):
 
 
 
-class FourierAttention(nn.module):
+class FourierAttention(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.proj_q = nn.Linear(cfg.hidden, cfg.hidden)
@@ -56,7 +56,7 @@ class FourierAttention(nn.module):
         # self.drop = nn.Dropout(cfg.p_drop_attn)
         self.scores = None # for visualization
         self.n_heads = cfg.n_heads
-
+        self.r = cfg.r
     def forward(self, x, mask):
         """
         x, q(query), k(key), v(value) : (B(batch_size), S(seq_len), D(dim))
@@ -69,11 +69,12 @@ class FourierAttention(nn.module):
                    for x in [q, k, v])
        # (B, H, S, W) , (B, H, W, S) |-> (B, H, S, S) -softmax-> (B, H, S, S)
         kernel = FourierAttentionKernel.apply
-        B, H, S, _ = q.shape
-        weights = torch.zeros((B, H, S, S))
+        B, H, S, W = q.shape
+        weights = torch.zeros((B, H, S, S), device=x.device)
+        r = torch.tensor(self.r, device=x.device)
         for l in range(S):
             for i in range(S):
-                weights[:,:,l,i] = kernel(q[:,:,l], k[:,:,i], self.r)
+                weights[:,:,l,i] = kernel(q[:,:,l], k[:,:,i], r)
         if mask is not None:
             mask = mask[:, None, None, :].float()
             weights -= 10000.0 * (1.0 - mask)
@@ -82,8 +83,8 @@ class FourierAttention(nn.module):
         # (B, H, S, S) @ (B, H, S, W) -> (B, H, S, W) -trans-> (B, S, H, W)
         y = (weights @ v)
         weight_sum = weights.sum(dim=-1)
-        for l in range(S):
-            y[:,:,l,:] = torch.div(y[:,:,l,:],weight_sum[:,:,l])        
+        for w in range(W):
+            y[:,:,:,w] = torch.div(y[:,:,:,w],weight_sum)        
         y = y.transpose(1, 2).contiguous()
         # -merge-> (B, S, D)
         h = merge_last(y, 2)

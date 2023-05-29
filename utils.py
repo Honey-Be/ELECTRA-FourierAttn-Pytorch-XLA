@@ -109,7 +109,7 @@ def _sample_mask(seg, mask_alpha, mask_beta,
     # try to n-gram masking SpanBERT(Joshi et al., 2019)
     # 3-gram implementation
     seg_len = len(seg)
-    mask = np.array([False] * seg_len, dtype=np.bool)
+    mask = np.array([False] * seg_len, dtype=bool)
 
     num_predict = 0
 

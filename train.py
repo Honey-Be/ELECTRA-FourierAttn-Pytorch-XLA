@@ -25,6 +25,7 @@ class Config(NamedTuple):
     warmup: float = 0.1
     save_steps: int = 100 # interval for saving model
     total_steps: int = 100000 # total number of steps to train
+    r: float = 1.125
 
     @classmethod
     def from_json(cls, file): # load config from json file
@@ -58,8 +59,7 @@ def discriminator_loss(generator, discriminator, batch, global_step, optimizer, 
     non_masked_label = (masked_ids == original_ids) 
     input_ids[non_masked_label] = original_ids[non_masked_label]
 
-    is_replaced = Variable((input_ids.long() != original_ids.long()).float())
-    is_replaced = is_replaced.cuda()
+    is_replaced = Variable((input_ids.long() != original_ids.long()).float()).cuda()
 
     logits_lm, logits_clsf = discriminator(input_ids, segment_ids, input_mask)
     logits_lm = logits_lm.squeeze(-1)
@@ -351,7 +351,7 @@ class AdversarialTrainer(object):
         for batch in iter_bar:
             batch = [t.to(self.device) for t in batch]
             with torch.no_grad(): # evaluation without gradient calculation
-                accuracy, result = evaluate(model, batch) # accuracy to print
+                accuracy, result = evaluate(generator, batch) # accuracy to print
             results.append(result)
 
             iter_bar.set_description('Iter(acc=%5.3f)'%accuracy)

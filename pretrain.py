@@ -32,7 +32,7 @@ class Generator(nn.Module):
         self.activ1 = nn.Tanh()
         self.linear = nn.Linear(cfg.hidden, cfg.hidden)
         self.activ2 = models.gelu
-        self.norm = models.LayerNorm(cfg)
+        self.norm = nn.LayerNorm(cfg.hidden)
         self.classifier = nn.Linear(cfg.hidden, 2)
 
         # decoder is shared with embedding layer
@@ -51,6 +51,7 @@ class Generator(nn.Module):
         self.decoder_bias = nn.Parameter(torch.zeros(n_vocab))
 
     def forward(self, input_ids, segment_ids, input_mask, masked_pos):
+        
         h = self.transformer(input_ids, segment_ids, input_mask)
         pooled_h = self.activ1(self.fc(h[:, 0]))
         masked_pos = masked_pos[:, :, None].expand(-1, -1, h.size(-1))
@@ -72,7 +73,7 @@ class Discriminator(nn.Module):
         self.activ1 = nn.Tanh()
         self.linear = nn.Linear(cfg.hidden, cfg.hidden)
         self.activ2 = models.gelu
-        self.norm = models.LayerNorm(cfg)
+        self.norm = nn.LayerNorm(cfg.hidden)
         self.classifier = nn.Linear(cfg.hidden, 2)
 
         # decoder is shared with embedding layer
@@ -110,6 +111,7 @@ class ELECTRA():
                                         args.mask_alpha,
                                         args.mask_beta,
                                         args.max_gram)]
+
         data_iter = DataLoader(SentPairDataset(args.data_file,
                                     cfg.batch_size,
                                     tokenize,

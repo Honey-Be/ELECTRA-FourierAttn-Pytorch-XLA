@@ -1,0 +1,13 @@
+{
+	"embedding" : 64,
+	"hidden": 256,
+	"hidden_ff": 1024,
+	"n_layers": 12,
+	"n_heads": 4,
+	"max_len": 400,
+	"p_drop_hidden": 0.1,
+	"n_segments": 2,
+	"vocab_size": 30522,
+	"r": 1.125
+}
+

@@ -113,8 +113,13 @@ class SentPairDataset(Dataset):
     def __len__(self):
         return self.size
 
+
 def seq_collate(batch):
-    batch_tensors = [torch.tensor(x, dtype=torch.long) for x in zip(*batch)]
+    batch_tensors = [
+        torch.tensor(
+            x   , dtype=torch.int64
+        ) for x in zip(*batch)
+    ]
     return batch_tensors    
 
 

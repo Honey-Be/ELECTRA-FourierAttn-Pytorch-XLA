@@ -141,7 +141,7 @@ $ tensorboard --logdir logs # expose http://server-ip:6006/
    
            # To used parameter-sharing strategies
            self.n_layers = cfg.n_layers
-           self.attn = MultiHeadedSelfAttention(cfg)
+           self.attn = FourierAttention(cfg)
            self.proj = nn.Linear(cfg.hidden, cfg.hidden)
            self.norm1 = LayerNorm(cfg)
            self.pwff = PositionWiseFeedForward(cfg)
