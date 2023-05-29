@@ -4,7 +4,7 @@
     Clean Pytorch Code from https://github.com/dhlee347/pytorchic-bert
 """
 
-""" Transformer Model Classes & Config Class """
+""" FourierFormer Model Classes & Config Class """
 
 import math
 import json
@@ -17,11 +17,13 @@ import torch.nn.functional as F
 
 from utils import split_last, merge_last
 
+from fourier_attention import FourierAttention
+
 
 class Config(NamedTuple):
     "Configuration for BERT model"
     vocab_size: int = None # Size of Vocabulary
-    hidden: int = 768 # Dimension of Hidden Layer in Transformer Encoder
+    hidden: int = 768 # Dimension of Hidden Layer in FourierFormer Encoder
     hidden_ff: int = 768*4 # Dimension of Intermediate Layers in Positionwise Feedforward Net
     embedding: int = 128 # Factorized embedding parameterization
     p_drop_hidden: float = 0.1 # finetune dropout
@@ -41,21 +43,6 @@ def gelu(x):
     return x * 0.5 * (1.0 + torch.erf(x / math.sqrt(2.0)))
 
 
-class LayerNorm(nn.Module):
-    "A layernorm module in the TF style (epsilon inside the square root)."
-    def __init__(self, cfg, variance_epsilon=1e-12):
-        super().__init__()
-        self.gamma = nn.Parameter(torch.ones(cfg.hidden))
-        self.beta  = nn.Parameter(torch.zeros(cfg.hidden))
-        self.variance_epsilon = variance_epsilon
-
-    def forward(self, x):
-        u = x.mean(-1, keepdim=True)
-        s = (x - u).pow(2).mean(-1, keepdim=True)
-        x = (x - u) / torch.sqrt(s + self.variance_epsilon)
-        return self.gamma * x + self.beta
-
-
 class Embeddings(nn.Module):
     "The embedding module from word, position and token_type embeddings."
     def __init__(self, cfg):
@@ -70,7 +57,7 @@ class Embeddings(nn.Module):
         self.pos_embed = nn.Embedding(cfg.max_len, cfg.hidden) # position embedding
         self.seg_embed = nn.Embedding(cfg.n_segments, cfg.hidden) # segment(token type) embedding
 
-        self.norm = LayerNorm(cfg)
+        self.norm = nn.LayerNorm(cfg.hidden)
         # self.drop = nn.Dropout(cfg.p_drop_hidden)
 
     def forward(self, x, seg):
@@ -84,41 +71,6 @@ class Embeddings(nn.Module):
         e = e + self.pos_embed(pos) + self.seg_embed(seg)
         #return self.drop(self.norm(e))
         return self.norm(e)
-
-class MultiHeadedSelfAttention(nn.Module):
-    """ Multi-Headed Dot Product Attention """
-    def __init__(self, cfg):
-        super().__init__()
-        self.proj_q = nn.Linear(cfg.hidden, cfg.hidden)
-        self.proj_k = nn.Linear(cfg.hidden, cfg.hidden)
-        self.proj_v = nn.Linear(cfg.hidden, cfg.hidden)
-        # self.drop = nn.Dropout(cfg.p_drop_attn)
-        self.scores = None # for visualization
-        self.n_heads = cfg.n_heads
-
-    def forward(self, x, mask):
-        """
-        x, q(query), k(key), v(value) : (B(batch_size), S(seq_len), D(dim))
-        mask : (B(batch_size) x S(seq_len))
-        * split D(dim) into (H(n_heads), W(width of head)) ; D = H * W
-        """
-        # (B, S, D) -proj-> (B, S, D) -split-> (B, S, H, W) -trans-> (B, H, S, W)
-        q, k, v = self.proj_q(x), self.proj_k(x), self.proj_v(x)
-        q, k, v = (split_last(x, (self.n_heads, -1)).transpose(1, 2)
-                   for x in [q, k, v])
-        # (B, H, S, W) @ (B, H, W, S) -> (B, H, S, S) -softmax-> (B, H, S, S)
-        scores = q @ k.transpose(-2, -1) / np.sqrt(k.size(-1))
-        if mask is not None:
-            mask = mask[:, None, None, :].float()
-            scores -= 10000.0 * (1.0 - mask)
-        #scores = self.drop(F.softmax(scores, dim=-1))
-        scores = F.softmax(scores, dim=-1)
-        # (B, H, S, S) @ (B, H, S, W) -> (B, H, S, W) -trans-> (B, S, H, W)
-        h = (scores @ v).transpose(1, 2).contiguous()
-        # -merge-> (B, S, D)
-        h = merge_last(h, 2)
-        self.scores = scores
-        return h
 
 
 class PositionWiseFeedForward(nn.Module):
@@ -134,15 +86,15 @@ class PositionWiseFeedForward(nn.Module):
         return self.fc2(gelu(self.fc1(x)))
 
 
-class Block(nn.Module):
-    """ Transformer Block """
+class FourierBlock(nn.Module):
+    """ FourierFormer Block """
     def __init__(self, cfg):
         super().__init__()
-        self.attn = MultiHeadedSelfAttention(cfg)
+        self.attn = FourierAttention(cfg)
         self.proj = nn.Linear(cfg.hidden, cfg.hidden)
-        self.norm1 = LayerNorm(cfg)
+        self.norm1 = nn.LayerNorm(cfg.hidden)
         self.pwff = PositionWiseFeedForward(cfg)
-        self.norm2 = LayerNorm(cfg)
+        self.norm2 = nn.LayerNorm(cfg.hidden)
         self.drop = nn.Dropout(cfg.p_drop_hidden)
 
     def forward(self, x, mask):
@@ -152,8 +104,8 @@ class Block(nn.Module):
         return h
 
 
-class Transformer(nn.Module):
-    """ Transformer with Self-Attentive Blocks"""
+class FourierFormer(nn.Module):
+    """ FourierFormer with Self-Attentive Blocks"""
     def __init__(self, cfg):
         super().__init__()
         self.embed = Embeddings(cfg)
@@ -162,7 +114,7 @@ class Transformer(nn.Module):
 
         # To used parameter-sharing strategies
         self.n_layers = cfg.n_layers
-        self.block = Block(cfg)
+        self.block = FourierBlock(cfg)
 
     def forward(self, x, seg, mask):
         h = self.embed(x, seg)
@@ -175,10 +127,10 @@ class Transformer(nn.Module):
 
 if __name__ == "__main__":
     model_cfg = Config.from_json('./config/albert_base.json')
-    model = Transformer(model_cfg)
+    model = FourierFormer(model_cfg)
     pytorch_total_params = sum(p.numel() for p in model.parameters())/1000000
     print("Discriminator    {:2.3f}M".format(pytorch_total_params))
     model_cfg = Config.from_json('./config/generator_base.json')
-    model = Transformer(model_cfg)
+    model = FourierFormer(model_cfg)
     pytorch_total_params = sum(p.numel() for p in model.parameters())/1000000
     print("Generator        {:2.3f}M".format(pytorch_total_params))

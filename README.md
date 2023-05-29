@@ -131,8 +131,8 @@ $ tensorboard --logdir logs # expose http://server-ip:6006/
 2. [**Cross-Layer Parameter Sharing**](https://github.com/graykode/ALBERT-Pytorch/blob/master/models.py#L155) : ALBERT use cross-layer parameter sharing in Attention and FFN(FeedForward Network) to reduce number of parameter.
   
    ```python
-   class Transformer(nn.Module):
-       """ Transformer with Self-Attentive Blocks"""
+   class FourierFormer(nn.Module):
+       """ FourierFormer with Self-Attentive Blocks"""
        def __init__(self, cfg):
            super().__init__()
            self.embed = Embeddings(cfg)

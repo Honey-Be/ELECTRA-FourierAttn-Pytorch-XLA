@@ -27,7 +27,7 @@ class Generator(nn.Module):
     "Bert Model for Pretrain : Masked LM and next sentence classification"
     def __init__(self, cfg):
         super().__init__()
-        self.transformer = models.Transformer(cfg)
+        self.transformer = models.FourierFormer(cfg)
         self.fc = nn.Linear(cfg.hidden, cfg.hidden)
         self.activ1 = nn.Tanh()
         self.linear = nn.Linear(cfg.hidden, cfg.hidden)
@@ -67,7 +67,7 @@ class Discriminator(nn.Module):
     "Bert Model for Pretrain : Masked LM and next sentence classification"
     def __init__(self, cfg):
         super().__init__()
-        self.transformer = models.Transformer(cfg)
+        self.transformer = models.FourierFormer(cfg)
         self.fc = nn.Linear(cfg.hidden, cfg.hidden)
         self.activ1 = nn.Tanh()
         self.linear = nn.Linear(cfg.hidden, cfg.hidden)

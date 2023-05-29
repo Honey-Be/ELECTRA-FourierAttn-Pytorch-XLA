@@ -1,7 +1,7 @@
 # Copyright 2018 Dong-Hyun Lee, Kakao Brain.
 # (Strongly inspired by original Google BERT code and Hugging Face's code)
 
-""" Fine-tuning on A Classification Task with pretrained Transformer """
+""" Fine-tuning on A Classification Task with pretrained FourierFormer """
 
 import itertools
 import csv
@@ -159,10 +159,10 @@ class TokenIndexing(Pipeline):
 
 
 class Classifier(nn.Module):
-    """ Classifier with Transformer """
+    """ Classifier with FourierFormer """
     def __init__(self, cfg, n_labels):
         super().__init__()
-        self.transformer = models.Transformer(cfg)
+        self.transformer = models.FourierFormer(cfg)
         self.fc = nn.Linear(cfg.hidden, cfg.hidden)
         self.activ = nn.ReLU()
         self.drop = nn.Dropout(cfg.p_drop_hidden)
