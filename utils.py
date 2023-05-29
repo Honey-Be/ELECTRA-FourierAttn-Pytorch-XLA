@@ -14,18 +14,21 @@ import numpy as np
 import torch
 
 
+import torch_xla
+import torch_xla.core.xla_model as xm
+
+torch.set_default_tensor_type('torch.FloatTensor')
+
 def set_seeds(seed):
     "set random seeds"
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    torch_xla.core.xla_model.set_rng_state(seed)
 
 def get_device():
     "get device (CPU or GPU)"
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    n_gpu = torch.cuda.device_count()
-    print("%s (%d GPUs)" % (device, n_gpu))
+    device = xm.xla_device()
     return device
 
 def split_last(x, shape):

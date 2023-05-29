@@ -6,7 +6,7 @@ import math
 
 import torch.nn.functional as F
 
-from utils import split_last, merge_last
+from utils import split_last, merge_last, get_device
 
 
     
@@ -14,7 +14,7 @@ from utils import split_last, merge_last
 
 
 class FourierAttention(nn.Module):
-    def __init__(self, cfg):
+    def __init__(self, cfg, device = get_device()):
         super().__init__()
         self.proj_q = nn.Linear(cfg.hidden, cfg.hidden)
         self.proj_k = nn.Linear(cfg.hidden, cfg.hidden)
@@ -23,6 +23,7 @@ class FourierAttention(nn.Module):
         self.scores = None # for visualization
         self.n_heads = cfg.n_heads
         self.r = cfg.r
+        self.device = device
     
     def forward(self, x, mask):
         """
@@ -36,8 +37,8 @@ class FourierAttention(nn.Module):
                    for x in [q, k, v])
         # (B, H, S, W) , (B, H, W, S) |-> (B, H, S, S) -softmax-> (B, H, S, S)
         B, H, S, W = q.shape
-        weights = torch.zeros((B, H, S, S)).cuda()
-        r = torch.tensor(self.r).cuda()
+        weights = torch.zeros((B, H, S, S)).to(self.device)
+        r = torch.tensor(self.r).to(self.device)
         for l in range(S):
             for i in range(S):
                 weights[:,:,l,i] = torch.prod(torch.pow(torch.sinc(torch.mul(r, q[:,:,l]-k[:,:,i])), 4), dim=-1)

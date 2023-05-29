@@ -14,6 +14,8 @@ from torch.autograd import Variable
 import torch
 import torch.nn as nn
 
+from utils import get_device
+
 class Config(NamedTuple):
     """ Hyperparameters for training """
     seed: int = 3431 # random seed
@@ -60,7 +62,7 @@ def discriminator_loss(generator, discriminator, batch, global_step, optimizer, 
     non_masked_label = (masked_ids == original_ids) 
     input_ids[non_masked_label] = original_ids[non_masked_label]
 
-    is_replaced = Variable((input_ids.long() != original_ids.long()).float()).cuda()
+    is_replaced = Variable((input_ids.long() != original_ids.long()).float()).to(get_device())
 
     logits_lm, logits_clsf = discriminator(input_ids, segment_ids, input_mask)
     logits_lm = logits_lm.squeeze(-1)
