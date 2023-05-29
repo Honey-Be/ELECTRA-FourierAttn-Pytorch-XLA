@@ -23,6 +23,7 @@ class FourierAttention(nn.Module):
         self.scores = None # for visualization
         self.n_heads = cfg.n_heads
         self.r = cfg.r
+    
     def forward(self, x, mask):
         """
         x, q(query), k(key), v(value) : (B(batch_size), S(seq_len), D(dim))
@@ -37,10 +38,9 @@ class FourierAttention(nn.Module):
         B, H, S, W = q.shape
         weights = torch.zeros((B, H, S, S)).cuda()
         r = torch.tensor(self.r).cuda()
-        with torch.no_grad():
-            for l in range(S):
-                for i in range(S):
-                    weights[:,:,l,i] = torch.prod(torch.pow(torch.sinc(torch.mul(r, q[:,:,l]-k[:,:,i])), 4), dim=-1)
+        for l in range(S):
+            for i in range(S):
+                weights[:,:,l,i] = torch.prod(torch.pow(torch.sinc(torch.mul(r, q[:,:,l]-k[:,:,i])), 4), dim=-1)
         if mask is not None:
             mask = mask[:, None, None, :].float()
             weights = weights - 10000.0 * (1.0 - mask)

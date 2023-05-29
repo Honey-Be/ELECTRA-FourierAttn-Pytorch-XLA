@@ -134,9 +134,9 @@ class FourierFormer(nn.Module):
 
     def forward(self, x, seg, mask):
         h = self.embed(x, seg)
-
-        for _ in range(self.n_layers):
-            h = self.block(h, mask)
+        with torch.no_grad():
+            for _ in range(self.n_layers):
+                h = self.block(h, mask)
 
         return h
 
