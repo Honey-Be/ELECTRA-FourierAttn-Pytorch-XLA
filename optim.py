@@ -127,7 +127,7 @@ class BertAdam(Optimizer):
                 # with the m/v parameters. This is equivalent to adding the square
                 # of the weights to the loss with plain (non-momentum) SGD.
                 if group['weight_decay_rate'] > 0.0:
-                    update += group['weight_decay_rate'] * p.data
+                    update = update + group['weight_decay_rate'] * p.data
 
                 if group['t_total'] != -1:
                     schedule_fct = SCHEDULES[group['schedule']]
@@ -138,7 +138,7 @@ class BertAdam(Optimizer):
                 update_with_lr = lr_scheduled * update
                 p.data.add_(-update_with_lr)
 
-                state['step'] += 1
+                state['step'] = state['step'] + 1
 
                 # step_size = lr_scheduled * math.sqrt(bias_correction2) / bias_correction1
                 # No bias correction
