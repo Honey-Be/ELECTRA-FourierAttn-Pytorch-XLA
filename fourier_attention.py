@@ -72,19 +72,21 @@ class FourierAttention(nn.Module):
         B, H, S, W = q.shape
         weights = torch.zeros((B, H, S, S), device=x.device)
         r = torch.tensor(self.r, device=x.device)
-        for l in range(S):
-            for i in range(S):
-                weights[:,:,l,i] = kernel(q[:,:,l], k[:,:,i], r)
-        if mask is not None:
-            mask = mask[:, None, None, :].float()
-            weights -= 10000.0 * (1.0 - mask)
-        #scores = self.drop(F.softmax(scores, dim=-1))
-        weights = F.softmax(weights, dim=-1)
-        # (B, H, S, S) @ (B, H, S, W) -> (B, H, S, W) -trans-> (B, S, H, W)
+        with torch.autograd.detect_anomaly():
+            for l in range(S):
+                for i in range(S):
+                    weights[:,:,l,i] = kernel(q[:,:,l], k[:,:,i], r)
+            if mask is not None:
+                mask = mask[:, None, None, :].float()
+                weights -= 10000.0 * (1.0 - mask)
+            #scores = self.drop(F.softmax(scores, dim=-1))
+            weights = F.softmax(weights, dim=-1)
+            # (B, H, S, S) @ (B, H, S, W) -> (B, H, S, W) -trans-> (B, S, H, W)
         y = (weights @ v)
-        weight_sum = weights.sum(dim=-1)
-        for w in range(W):
-            y[:,:,:,w] = torch.div(y[:,:,:,w],weight_sum)        
+        with torch.autograd.detect_anomaly():
+            weight_sum = weights.sum(dim=-1)
+            for w in range(W):
+                y[:,:,:,w] = torch.div(y[:,:,:,w],weight_sum)        
         y = y.transpose(1, 2).contiguous()
         # -merge-> (B, S, D)
         h = merge_last(y, 2)
