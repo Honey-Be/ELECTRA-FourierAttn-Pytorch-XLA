@@ -114,9 +114,10 @@ class Trainer(object):
                 loss.backward()
                 self.optimizer.step()
 
-                global_step += 1
-                loss_sum += loss.item()
-                iter_bar.set_description('Iter (loss=%5.3f)'%loss.item())
+                global_step = global_step + 1
+                loss_detached = loss.detach()
+                loss_sum = loss_sum + loss_detached
+                iter_bar.set_description('Iter (loss=%5.3f)'%loss_detached)
 
                 if global_step % self.cfg.save_steps == 0: # save
                     self.save(global_step)
@@ -214,7 +215,7 @@ class MLMTrainer(object):
                 loss.backward()
 
                 global_step += 1
-                loss_sum += loss.item()
+                loss_sum = loss_sum + loss.detach()
                 iter_bar.set_description('Iter (loss=%5.3f)'%loss.item())
 
                 if global_step % self.cfg.save_steps == 0: # save
@@ -317,7 +318,7 @@ class AdversarialTrainer(object):
 
                 total_loss = g_loss + d_loss
 
-                loss_sum += total_loss.detach()
+                loss_sum = loss_sum + total_loss.detach()
 
                 total_loss.backward()
 
