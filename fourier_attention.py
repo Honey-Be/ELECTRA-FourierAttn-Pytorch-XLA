@@ -39,7 +39,7 @@ class FourierAttention(nn.Module):
         r = torch.tensor(self.r).cuda()
         for l in range(S):
             for i in range(S):
-                weights[:,:,l,i] = torch.prod(torch.pow(torch.sinc(r * q[:,:,l]-k[:,:,i]), 4), dim=-1)
+                weights[:,:,l,i] = torch.prod(torch.pow(torch.sinc(torch.mul(r, q[:,:,l]-k[:,:,i]), 4), dim=-1)
         if mask is not None:
             mask = mask[:, None, None, :].float()
             weights = weights - 10000.0 * (1.0 - mask)
