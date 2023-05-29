@@ -8,40 +8,21 @@ import torch.nn.functional as F
 
 from utils import split_last, merge_last
 
-
-def sa(x):
-    return torch.sin(x) / x
-
-def deriv_sa(x):
-    return (torch.cos(x) / x) - (torch.sin(x) / (x ** 2))
-
-def pow4(x):
-    return x ** 4
-
-def deriv_pow4(x):
-    return 4 * (x ** 3)
-
 class FourierAttentionKernel(torch.autograd.Function):
     @staticmethod
     def forward(ctx, q, k, r):
         ctx.save_for_backward(q, k, r)
-        tmp = r * (q - k)
-        map_sa = torch.func.vmap(sa)
-        map_pow4 = torch.func.vmap(pow4)
-        tmp = map_sa(tmp)
-        y = map_pow4(tmp)
+        tmp = torch.sinc(r * (q - k))
+        y = torch.pow(tmp, 4)
         return torch.prod(y, dim=-1)
     
     @staticmethod
     def backward(ctx: Any, grad_output):
         q, k, r = ctx.saved_tensors
         tmp = r * (q - k)
-        map_deriv_pow4 = torch.func.vmap(deriv_pow4)
-        map_sa = torch.func.vmap(sa)
-        map_deriv_sa = torch.func.vmap(deriv_sa)
-        y1 = map_sa(tmp)
-        y1 = map_deriv_pow4(y1)
-        y2 = map_deriv_sa(tmp)
+        y1 = torch.sinc(tmp)
+        y1 = 4 * torch.pow(y1, 3)
+        y2 = torch.div(torch.cos(tmp) - torch.sinc(tmp),tmp) 
         return grad_output * torch.prod(y1 * y2, dim=-1)
     
 
