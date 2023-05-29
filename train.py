@@ -211,7 +211,8 @@ class MLMTrainer(object):
                     )
                 if data_parallel:
                     loss = loss.mean()
-                loss.backward()
+                with torch.autograd.detect_anomaly():
+                    loss.backward()
                 self.optimizer.step()
 
                 global_step += 1
@@ -290,7 +291,7 @@ class AdversarialTrainer(object):
 
         global_step = 0 # global iteration steps regardless of epochs
         for e in range(self.cfg.n_epochs):
-            loss_sum = 0. # the sum of iteration losses to get average loss in every epoch
+            loss_sum = torch.torch(0.) # the sum of iteration losses to get average loss in every epoch
             iter_bar = tqdm(self.data_iter, desc='Iter (loss=X.XXX)')
             for i, batch in enumerate(iter_bar):
                 batch = [t.to(self.device) for t in batch]
@@ -318,13 +319,13 @@ class AdversarialTrainer(object):
 
                 total_loss = g_loss + d_loss
 
-                loss_sum += total_loss.item()
+                loss_sum += total_loss.detach()
 
                 total_loss.backward()
 
                 self.optimizer.step()
 
-                iter_bar.set_description('(d_loss: {:5.3f}, g_loss: {:5.3f}, loss: {:5.3f})'.format( d_loss.item(), g_loss.item(), float(total_loss.item()) ) )
+                iter_bar.set_description('(d_loss: {:5.3f}, g_loss: {:5.3f}, loss: {:5.3f})'.format( float(d_loss.detach()), float(g_loss.detach()), float(total_loss.detach()) ) )
 
                 if global_step % self.cfg.save_steps == 0: # save
                     self.save(global_step)
