@@ -37,8 +37,7 @@ class FourierAttention(nn.Module):
         q, k, v = self.proj_q(x), self.proj_k(x), self.proj_v(x)
         q, k, v = (split_last(x, (self.n_heads, -1)).transpose(1, 2)
                    for x in [q, k, v])
-       # (B, H, S, W) , (B, H, W, S) |-> (B, H, S, S) -softmax-> (B, H, S, S)
-        kernel = FourierAttentionKernel.apply
+        # (B, H, S, W) , (B, H, W, S) |-> (B, H, S, S) -softmax-> (B, H, S, S)
         B, H, S, W = q.shape
         weights = torch.zeros((B, H, S, S)).cuda()
         r = torch.tensor(self.r).cuda()
