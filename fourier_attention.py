@@ -8,22 +8,11 @@ import torch.nn.functional as F
 
 from utils import split_last, merge_last
 
-class FourierAttentionKernel(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, q, k, r):
-        ctx.save_for_backward(q, k, r)
-        tmp = torch.sinc(r * (q - k))
-        y = torch.pow(tmp, 4)
-        return torch.prod(y, dim=-1)
-    
-    @staticmethod
-    def backward(ctx: Any, grad_output):
-        q, k, r = ctx.saved_tensors
-        tmp = r * (q - k)
-        y1 = torch.sinc(tmp)
-        y1 = 4 * torch.pow(y1, 3)
-        y2 = torch.div(torch.cos(tmp) - torch.sinc(tmp),tmp) 
-        return grad_output * torch.prod(y1 * y2, dim=-1)
+
+def fourier_integral_kernel(q, k, r):
+    tmp = torch.sinc(r * (q - k))
+    y = torch.pow(tmp, 4)
+    return torch.prod(y, dim=-1)
     
 
 
@@ -55,7 +44,7 @@ class FourierAttention(nn.Module):
         r = torch.tensor(self.r).cuda()
         for l in range(S):
             for i in range(S):
-                weights[:,:,l,i] = kernel(q[:,:,l], k[:,:,i], r)
+                weights[:,:,l,i] = fourier_integral_kernel(q[:,:,l], k[:,:,i], r)
         if mask is not None:
             mask = mask[:, None, None, :].float()
             weights = weights - 10000.0 * (1.0 - mask)
