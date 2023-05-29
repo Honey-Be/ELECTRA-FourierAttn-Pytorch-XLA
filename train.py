@@ -211,9 +211,7 @@ class MLMTrainer(object):
                     )
                 if data_parallel:
                     loss = loss.mean()
-                with torch.autograd.detect_anomaly():
-                    loss.backward()
-                self.optimizer.step()
+                loss.backward()
 
                 global_step += 1
                 loss_sum += loss.item()
