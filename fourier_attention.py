@@ -51,8 +51,8 @@ class FourierAttention(nn.Module):
        # (B, H, S, W) , (B, H, W, S) |-> (B, H, S, S) -softmax-> (B, H, S, S)
         kernel = FourierAttentionKernel.apply
         B, H, S, W = q.shape
-        weights = torch.zeros((B, H, S, S), device=x.device)
-        r = torch.tensor(self.r, device=x.device)
+        weights = torch.zeros((B, H, S, S)).cuda()
+        r = torch.tensor(self.r).cuda()
         for l in range(S):
             for i in range(S):
                 weights[:,:,l,i] = kernel(q[:,:,l], k[:,:,i], r)
