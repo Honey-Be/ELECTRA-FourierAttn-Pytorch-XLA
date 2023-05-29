@@ -22,6 +22,8 @@ from utils import set_seeds, get_device
 from torch.utils.data import Dataset, DataLoader
 from data import seek_random_offset, SentPairDataset, Pipeline, Preprocess4Pretrain, seq_collate
 
+torch.autograd.set_detect_anomaly(True)
+
 
 class Generator(nn.Module):
     "Bert Model for Pretrain : Masked LM and next sentence classification"
