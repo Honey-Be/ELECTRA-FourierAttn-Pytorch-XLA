@@ -63,10 +63,9 @@ class FourierAttention(nn.Module):
         weights = F.softmax(weights, dim=-1)
         # (B, H, S, S) @ (B, H, S, W) -> (B, H, S, W) -trans-> (B, S, H, W)
         y = (weights @ v)
-        with torch.autograd.detect_anomaly():
-            weight_sum = weights.sum(dim=-1)
-            for w in range(W):
-                y[:,:,:,w] = torch.div(y[:,:,:,w],weight_sum)        
+        weight_sum = weights.sum(dim=-1)
+        for w in range(W):
+            y[:,:,:,w] = torch.div(y[:,:,:,w],weight_sum)        
         y = y.transpose(1, 2).contiguous()
         # -merge-> (B, S, D)
         h = merge_last(y, 2)
